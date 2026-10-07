@@ -1,477 +1,157 @@
 # H3 Motion Context
 
-Chain MiniMax H3 clips so motion and sound keep going across the cut.
+[简体中文](README_zh-CN.md)
 
-Generate clip A. Feed its last frames and audio into this node. Generate
-clip B. B picks up where A left off: same motion, same speed, same
-direction, and the same audio continued rather than a new take that
-sounds similar. Repeat as long as you like.
+Generate long MiniMax H3 videos with one prompt and a total duration. This fork of [NikoDemon80/ComfyUI-H3-Motion-Context](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context) adds automatic sampling, motion/audio continuation, overlap trimming and joining, plus a reference-prompt editor and optional AI prompt planning. The original chaining nodes remain available.
 
-Nothing on disk is edited and nothing in ComfyUI is modified. The nodes
-check their arithmetic against the live ComfyUI code before the first
-render, and if an update breaks an assumption they refuse to run and say
-what moved. A loud failure beats a bad render you don't notice.
+## Install and open the example
 
-Requires ComfyUI 0.34.0 or newer, which is where H3 gained arbitrary
-keyframe anchors. Version 0.3.1 runs on that and on everything older;
-see [CHANGELOG.md](CHANGELOG.md).
+Requires ComfyUI with native H3, arbitrary keyframe anchors (ComfyUI 0.34.0+) and **Concatenate Video** support. Long Video also checks for native video concatenation at runtime.
 
-## Why this exists
+From `ComfyUI/custom_nodes`, install this fork and restart ComfyUI:
 
-ComfyUI can anchor a still or a short clip at any frame of an H3
-generation, with the Add Guide for MiniMax H3 node. If that is all you
-need, use it. You do not need this pack for it.
-
-Chaining is a different problem, and two parts of it are still unsolved
-by anything else.
-
-**The picture goes out to pixels and back at every link.** Add Guide takes
-images and encodes them. Chain through it and every join costs a decode, a
-resize and a re-encode. That round trip is where the colour drift and the
-softening down a long chain come from. This pack slices the previous
-clip's tail straight out of its latent, so the pinned frames are the same
-numbers they were, bit for bit.
-
-**The sound restarts instead of continuing.** Add Guide anchors audio
-starting at a frame and running forward. To actually continue a
-soundtrack, the pinned window has to END at the join and reach backwards
-into the sound that already played. That is the difference between the
-model continuing your track and the model writing something that sounds
-like it, and on anything with a beat you hear it immediately.
-
-Everything else here follows from those two: the Trim node that removes
-the pinned head from the delivery, the Save/Load Latent pair that carries
-a clip across without touching pixels, and the Seam Probe that measures
-whether a join is a real continuation or a convincing imitation.
-
-Audio was the harder half, and it's the more useful half, since H3
-generates picture and sound together. See "Why the audio needed work"
-below if you care how.
-
-## Install
-
-Drop the folder in `ComfyUI/custom_nodes/` and restart. At startup you'll
-just see:
-
-```
-h3_motion_context: nodes registered. ComfyUI is not modified; the layout
-checks run on the first use of a Motion Context node.
+```sh
+git clone https://github.com/ooizj/ComfyUI-H3-Motion-Context.git comfyui-h3-motion-context
 ```
 
-Having the pack installed changes nothing about your other H3 workflows,
-and nothing runs until you actually chain a clip. The first time you do,
-you'll see:
-
-```
-h3_motion_context: ComfyUI H3 layout checks passed, anchors and pinned audio will land where intended
-```
-
-Anything else and the node refuses to run. The reason is logged.
-
-On ComfyUI 0.33.4 or older the node says so and points you at version
-0.3.1, which runs on both. That is read from the layout code itself
-rather than a version number, so a nightly or a fork gets the right
-answer.
-
-## Wiring
-
-```
-MiniMaxH3ImageToVideo / MiniMaxH3ReferenceToVideo (or the t2v path)
-  -> H3 Motion Context      <- previous clip's latent (picture + sound)
-  -> guider / sampler
-  ...
-  decoded IMAGE + AUDIO
-  -> H3 Motion Context Trim         <- wire trim_frames across
-  -> Create Video / save
-```
-
-Wire `trim_frames` into the Trim node. The pinned frames come back at the
-start of the new clip and have to come off before you concatenate, picture
-and sound together.
-
-### Carrying the previous clip across
-
-The previous clip reaches the node as a latent, but you can't wire the sampler
-straight into `context_latent`. ComfyUI will call it a circular
-connection, and it's right: the latent you want is from the previous run,
-not this one. Two helper nodes move it across runs the same way your
-frames and audio already move across, through a file:
-
-```
-this run:   SamplerCustomAdvanced -> H3 Motion Context Save Latent
-next run:   H3 Motion Context Load Latent -> context_latent
-```
-
-Both have a `clip_index` and the numbers mean what they say. On Load, the
-clip you're continuing FROM. On Save, the clip this one IS. First clip:
-Load 0, Save 1. Making clip 2 from clip 1: Load 1, Save 2.
-
-Load 0 does not read a file. Motion Context then passes the incoming
-conditioning through and reports `trim_frames` 0, so you can leave the
-node enabled for the first clip. Do not mute it.
-
-Do not use queue **run on change** to walk the chain. Each index change is
-a separate graph edit, so two widgets incrementing will queue two runs and
-skip slots. Use **H3 Motion Context Chain** instead of ComfyUI's Run
-button.
-
-**The Chain node only sees Load and Save if all three sit in the same
-canvas group** (one of those coloured boxes you draw around nodes). If
-they are not grouped together, every button does nothing. Select Load,
-Save, and Chain, then Group Selected (or drop Chain into the existing
-Motion Context group).
-
-- **Run/Re-roll** is the Run button for this graph. It queues at the
-  current Load/Save indices and does not advance them. First clip: leave
-  Load 0 / Save 1 and click it. Hate the result? Click it again; the
-  retry overwrites that slot.
-- **Approve** advances both indices, then queues the next clip once.
-- **Chain** is Approve on a loop. After a finished clip it bumps
-  Load/Save and keeps going, so a 0/1 clip you already made becomes 1/2
-  rather than a re-roll. The exception is Load 0 / Save 1 with no clip 1
-  on disk: it generates that first clip, then auto-approves. **segments**
-  is how many clips that loop runs: 5 means five clips then stop, 0 means
-  keep going until you click **Stop**.
-- **Reset** sets Load 0 / Save 1. It does not queue and does not delete
-  files.
-- **Clear latents** deletes numbered chain slots
-  (`clip_00001.safetensors` and so on) in the Load folder. Files you
-  renamed are left alone. Indices stay put.
-
-Files are named the obvious way, `clip_00002.safetensors` is clip 2.
-
-Auto-saved files (Save at 0) get a trailing underscore
-(`clip_00002_.safetensors`) because they're numbered by run, not by clip,
-and indexed loading skips them on purpose.
-
-You can also point the loader at a specific file when `clip_index` is
-greater than 0; the file is loaded and the index is ignored. Index 0
-never reads a file.
-Its output is only for `context_latent`. Don't wire it into a decode node.
-Stock Save/Load Latent won't work here, it can't handle H3's paired
-video/audio latent.
-
-The latent carries both streams, so with it wired you don't need to load
-the previous clip's video at all. The pinned frames are sliced straight
-out of it rather than decoded to pixels and encoded again, so they're
-exactly what the model made instead of a reconstruction. Nothing shifts
-the colour or the contrast, so there's no seam to see, and it's faster.
-
-Nothing to set for any of that. Leave `context_frames` unwired. Resolution
-has to match between clips, since a latent can't be resized; if it doesn't
-the node refuses and names both resolutions rather than quietly dropping
-to the lossy path.
-
-There's an older path for graphs with no latent: the previous clip's
-frames into `context_frames`, its decoded audio into `context_audio`, and
-the H3 audio VAE into `audio_vae`. It works, but it costs a lossy round
-trip per link on both streams and it's where the visible seams came from.
-Use the latent unless you have a reason not to.
-
-### Reference mode
-
-Put this node after `MiniMaxH3ReferenceToVideo` and wire it as above. Your
-reference blocks (image, video, video with audio, audio) are left alone
-entirely: the pinned sound rides as a keyframe, not a reference, so the
-two mechanisms no longer share a list.
-
-Nothing to configure. Worth mentioning only because versions before 0.2.0
-overwrote that list, so turning chaining on quietly threw your references
-away, and because up to 0.3.1 the pinned audio was added to it.
-
-References still push the target timeline along, and the pinned frames
-follow it. That is ComfyUI's own arithmetic now rather than this pack's.
-
-### Alongside Add Guide
-
-Anchor whatever you like with Add Guide for MiniMax H3 and put this node
-after it. Both survive: the pinned head decides how the clip starts, the
-guide decides what happens where you put it. Guides that carry audio keep
-their own placement, which is forward from the anchor frame, while the
-pinned sound keeps its backwards-reaching window.
-
-Guides anchored inside the pinned head are dropped with a warning, for
-the same reason a `first_frame` anchor is.
-
-### Keeping a last-frame target
-
-Wire `last_frame` on the stock conditioning node as usual and put this
-node after it. The anchor is kept and pinned alongside the head: the
-pinned run decides how the clip starts, your image decides where it
-ends. It keeps the coordinates ComfyUI gave it, including the shift
-references apply, so it stays put whatever else is in the graph.
-
-A `first_frame` anchor is dropped, with a warning. The pinned head owns
-those frames, and a second block pinned at the same instant with
-different content would fight it. Older versions silently replaced both
-anchors, so if a chain graph carried a last-frame target before this
-version, it never reached the model.
-
-## Settings
-
-Two, because everything else had exactly one right answer.
-
-**context_length** - frames of the previous clip's picture to carry over.
-5, 22, 39 or 56. Those are the lengths that are a whole number of latent
-steps, which is why the others aren't offered. 5 is just barely fluid, 22
-is nearly seamless. Longer windows pin more motion but they come off the
-front of the delivered clip, so 56 spends 2.3 seconds of every render on
-frames you throw away. **Use 22.**
-
-**audio_context_length** - frames of tail audio to pin, independent of the
-picture window. It ends at the same instant as the pinned video, so this
-only controls how far back the sound reaches. 0 follows context_length.
-**Use 24**: that is exactly one second of sound, and any multiple of 3
-lands exactly on the model's 40 Hz audio grid (a frame is 5/3 of an
-audio step), so the window is pinned at precisely the width you asked
-for. Off-grid values are widened to the nearest whole step. Increments
-of 24 keep whole seconds: 48 pins the last two.
-
-Everything else is fixed: the pinned run is encoded in one VAE call, it
-sits at the head of the clip where the Trim node removes it, and the
-pinned audio goes on this clip's own timeline. The alternatives all
-existed only to reproduce their own failures, so they're constants at the
-top of `nodes.py` now. Change one there if you ever need to see what they
-did.
-
-`match_tail` on the Trim node stays a setting because that node has no
-idea what the other one did. Leave it on. H3 rounds its audio grid up, so
-every clip carries about 8ms more sound than picture, and that error
-stacks at every join.
-
-## Writing prompts for a chain
-
-The settings get motion and sound across the join. What happens in the
-next clip is on you, and there are a few traps.
-
-**The model renders contradictions as unions.** Clip N ends on a close-up
-of A, clip N+1's prompt opens with "a two-shot of B and C," and the model
-doesn't pick. You get all three. The pinned frames aren't a suggestion, so
-a prompt describing a different arrangement of people reads as an addition
-to them, not a replacement.
-
-**The airlock.** Don't ask for the change and the continuation at the same
-moment. Open clip N+1 holding clip N's exact closing framing, no dialogue,
-about two seconds, then cut to the new setup. Joins done this way measure
-tighter than an ordinary frame-to-frame cut. Joins that skip it measure
-like two different rooms spliced together.
-
-**Give the hold something to do.** A held framing with nothing happening
-renders as a literal freeze, and two seconds of a motionless actor looks
-like the video stalled. Write in a breath, a weight shift, an eyeline
-change. The camera holds still, the performer doesn't.
-`tests/freeze_detect.py` finds these.
-
-**Budget the pinned head in your timecodes.** In `head` mode the clip
-comes out `context_length` frames shorter than it was sampled. At 22 that's
-0.92 seconds. Your prompt timings land against the sampled version, which
-starts 0.92s earlier, so a beat you wrote for 4.0s shows up at 3.08s in the
-file.
-
-## Why the audio needed work
-
-The first version ran pinned audio through H3's reference mechanism, which
-is where audio conditioning normally goes. Every join had a small tick,
-like the audio briefly sped up and went offbeat. Looking at the waveform
-showed nothing wrong. Both sides of every join were smooth on their own.
-
-Cross-correlating each clip's opening against the previous clip's ending
-(that's `tests/seam_probe.py`) showed what was actually happening: the new
-clip's audio resembled the old one. Same instruments, same groove, never
-the same recording. A cover band. The model was reading the reference as
-"a separate clip that sounds like this," which is what references are for
-and exactly wrong for continuation.
-
-The fix is the same one that already worked for video. The rows the model
-sees are identical either way. What differs is their time coordinates, and
-the coordinates are what say "separate clip" versus "this clip, earlier."
-So the pinned audio still rides the reference machinery, but its
-coordinates get rewritten onto the new clip's timeline, ending exactly
-where the pinned video ends. Correlation at the joins went from about 0.45
-with incoherent timing to 0.95+ with a flat offset, and the tick was gone.
-Measured across a chain, the offset doesn't grow from join to join.
-
-## Limitations
-
-**Quality degrades down a chain.** The big one, and it's mostly audio.
-Each clip is generated from the previous clip's output, which came from
-the one before it. Losses compound like photocopying a photocopy, and in
-audio the top end goes first. Timing and tempo stay locked, but after
-several clips the sound gets duller and more muffled. Picture holds up
-much better.
-
-Two things stack per link: the model's own smoothing, and a round trip
-out to pixels and back. `context_latent` removes the second one for both
-streams. On picture that's the difference between a visible join and no
-join at all. On sound it helps, but the model's own smoothing is still
-there. Long chains are worth listening to critically, and restarts land
-best at a natural musical transition.
-
-**A small audio offset, now believed fixed.** Chained clips used to come
-out about 8ms late. The cause was arithmetic: a frame is 5/3 of an audio
-step, so unless the pinned window's length works out to a whole number of
-steps it landed between the ones the model was filling. The window is now
-snapped to that grid. The offset was constant, well under where lip-sync
-errors get noticeable, and it didn't grow down a chain, so this is a
-tidy-up rather than a rescue. `tests/seam_probe.py` reports the lag in
-milliseconds if you want to check it on your own material.
-
-**H3 emits 32 kHz audio, not 48.** Read the rate off the clip in any script
-that remuxes or concatenates. A stream-copy concat can't change rate
-partway, so a hardcoded 48000 silently turns the tail of a long episode
-into nothing while every duration check still passes.
-`tests/level_step.py` prints every clip's rate and flags a mismatch.
-
-**Turbo LoRAs and Spectrum both cost you audio.** A turbo LoRA hits a
-result in very few steps, and fine detail is what those last steps were
-for. It thickens the sound and softens the picture. Step-skipping
-optimizers like ComfyUI-Spectrum-MiniMax-H3 do the same thing to the
-audio, less so to the picture, and they also mispredict the pinned rows,
-which never change. Run both together and it stacks. If a chain sounds
-duller or closer than you expected, try turning these off before blaming
-the chaining. **Keep Spectrum off for these graphs.**
-
-**Resolution can't change mid-chain** while using `context_latent`. A
-latent can't be resized, so the node refuses. Regenerate the previous clip
-at the new resolution, or start a fresh chain there.
-
-**Prompting a chain takes work**, especially with reference mode. Every
-reference conditions the whole clip; there's no way to say "this one
-starts two seconds in." Timing has to come from the shot structure and
-the description. See "Writing prompts for a chain" above.
-
-**Tested narrowly.** Joins have been verified on dense beat-driven
-electronic music, where timing errors are most audible, and on spoken word
-through the latent path, where nothing hides a seam. One Windows machine,
-one resolution, one sampler. The math self-tests every startup. The
-perceptual results are one person's renders.
-
-**ComfyUI's H3 support is young.** This pack no longer patches any of it,
-but it still depends on how the layout places things, and one of those
-dependencies has no upstream test behind it: the pinned audio window is
-positioned with a fractional, negative anchor index. That is legal
-arithmetic in the layout and no stock node can produce one, so nothing
-upstream exercises it. `layout_contract.py` checks it before the first
-render and refuses if it ever stops holding.
-
-The failure mode after a ComfyUI update is therefore "the node won't
-run," not bad output. There is a worked example: when the layout
-constructor changed, 0.3.0 of this pack refused until 0.3.1 caught up.
-Annoying, but the alternative was joins landing at the wrong instant with
-nothing to tell you.
-
-**License.** The H3 community license reportedly doesn't currently cover
-the EU, UK, Korea or the US. Check for yourself before shipping anything
-on it.
-
-## Recommended starting point
-
-`context_length 22`, `audio_context_length 24`, `context_latent` wired
-through the Save/Load Latent pair, Trim node wired for picture and sound
-with `match_tail` on, Spectrum off. Every "it works" in this README means
-that config.
-
-## Testing
-
-Six scripts, all runnable without ComfyUI or a GPU.
-
-```
-python tests/_mock_harness.py        # the layout checks against a fake stock model
-python tests/_node_smoke_test.py     # the node end to end, refs + save/load
-python tests/_probe_node_test.py     # the seam probe node, joins with known answers
-python tests/seam_probe.py A.flac B_untrimmed.flac    # is the join real continuation?
-python tests/level_step.py clip*.flac                 # does the level or room tone jump?
-python tests/freeze_detect.py clip*.mp4               # did a held shot render as a still?
-```
-
-The first three print their checks and end with a pass line. The other
-three measure real output; `level_step` and `freeze_detect` take
-`--self-test` to check their own math on made-up data first, and
-`seam_probe`'s math is what `_probe_node_test.py` exercises.
-
-The three measurement scripts ask different questions and a join can fail
-any one on its own. `seam_probe` is timing: is the audio the same waveform
-continued, or a sound-alike. `level_step` is volume: does the loudness, or
-the room tone underneath it, jump at the cut. `freeze_detect` is picture:
-is anything happening in that shot.
-
-For `seam_probe` and `level_step`, give them the UNTRIMMED audio of the new
-clip. Branch the audio decode to a second Save Audio node alongside the
-Trim.
-
-### Measuring a join in-graph
-
-The H3 Motion Context Seam Probe node runs the same measurements inside
-the graph, where the seam position is known exactly rather than inferred
-from file ends (that inference is where the CLI probe's phantom ~8 ms lag
-came from). Wire it inline between the audio VAE decode and the Trim
-node:
-
-```
-clip_a_latent     the same latent wired into context_latent
-audio_vae         the same audio VAE
-clip_b_untrimmed  this clip's audio off the VAE decode, before the trim
-trim_frames       from the Motion Context node, same value the Trim gets
-```
-
-The audio output is the input unchanged, so it drops into an existing
-chain without changing the render. The report goes to a Preview Text
-node: lag, correlation, broadband and floor steps, judged against the
-same thresholds the CLI scripts document.
-
-## Upgrading
-
-[CHANGELOG.md](CHANGELOG.md) lists what changed in each release and which
-ComfyUI H3 layout it works with. Worth a look before opening an issue or
-starting a fork: several fixes people have rebuilt from scratch were
-already in an earlier release.
-
-The node's widgets changed. ComfyUI stores widget values by position, so a
-workflow saved against an older version will load its numbers into the
-wrong slots. Delete the Motion Context node, add it again and rewire it.
-Takes a minute and beats rendering with scrambled settings.
-
-**Only install this once.** A fork of this repo, a manual clone next to a
-Manager install, or a renamed backup still sitting in `custom_nodes` will
-all load. Renaming a folder does not stop ComfyUI loading it.
-
-Older versions of this pack, and other H3 packs, patch ComfyUI's layout
-code at runtime. This one does not, so it no longer competes for that
-code and will run alongside them. If it finds the layout wrapped it says
-who by, then checks whether anchors still land correctly and carries on
-if they do. Keeping one H3 chaining pack installed is still the quiet
-life.
-
-## Credits
-
-The Ref2VA multi-reference support was worked out by **seitanism** in the
-Banodoco MiniMax H3 seamless-extension thread and first implemented in
-**ethanfel**'s fork of this repo. The code here is written independently,
-but the idea is theirs and they got there first.
-
-The prompting section comes out of a 16-clip, 4:34 multicam sitcom episode
-chained with this pack at 736x576 on a 5070 Ti, about two hours of
-generation. The airlock, the freeze warning, the 32 kHz trap and the
-timecode budget are all that build's findings. Same run measured a
-video-only chain at a median seam level step of 0.905, dropping to 0.16
-with the audio carried across.
-
-**javawock7618** and **azra1l** reported the layout change that broke
-0.3.0 and narrowed it to specific commits, which turned a hunt into a
-diff. **ChimeraWerks** found and fixed the audio grid overhang.
-
-If you build something long with this, numbers are more useful than praise.
-Open an issue.
-
-## Files
-
-| File | Role |
-|---|---|
-| `layout_contract.py` | Proves ComfyUI still places anchors and pinned audio where this pack needs them, once, before the first render. Modifies nothing. |
-| `nodes.py` | The four core nodes: Motion Context, Trim, and the latent Save/Load pair. |
-| `probe_node.py` | The Seam Probe node: measures a join in-graph, with the seam at a known sample instead of inferred from file ends. |
-| `tests/seam_probe.py` | Is a join's audio a real continuation, a sound-alike, or drifting. |
-| `tests/level_step.py` | Level and room-tone continuity at each join. Also catches sample-rate mismatches. |
-| `tests/freeze_detect.py` | Stretches where the picture stops moving. |
-| `tests/_mock_harness.py`, `tests/_node_smoke_test.py`, `tests/_probe_node_test.py` | Layout, node and probe tests, numpy only. |
-| `CHANGELOG.md` | What changed in each release, and which ComfyUI H3 layout it works with. |
+Keep one installation of this pack to avoid duplicate node IDs. If already installed, update that checkout instead of cloning a second copy. Refresh the browser after updating frontend files.
+
+Open [H3 Long Video - Simple.json](example_workflows/H3%20Long%20Video%20-%20Simple.json). This minimal example contains **H3 Model Loader → H3 Long Video (Simple) → Save Video**. Choose installed models, enter `prompt` and `total_seconds`, then run. Add the optional prompt nodes from `video/minimax` for the reference-image workflow below.
+
+## Connect the nodes
+
+[![Reference Prompt Builder, Prompt API and Long Video connections](docs/images/ref-prompt-builder.png)](docs/images/ref-prompt-builder.png)
+
+| From | To | Purpose |
+| --- | --- | --- |
+| Model Loader: `MODEL`, `CLIP`, `VAE`, `AUDIO_VAE` | Long Video: `model`, `clip`, `vae`, `audio_vae` | H3 generation models |
+| Ref Prompt Builder: `prompt` | Long Video: `prompt` | Complete six-section prompt; convert the text widget to an input if needed |
+| Ref Prompt Builder: `reference_images` | Long Video: `reference_images` | Pictures in the same order as `<Picture N>` |
+| Prompt API **or** Prompt Local: `prompt_api` | Builder: `prompt_api` | Optional AI editing/import |
+| The same Prompt API/Local output | Long Video: `prompt_api` | Optional prompt planning for multiple segments |
+| Load Image: `IMAGE` | Long Video: `first_frame` | Optional opening composition, used only in segment 1 |
+| Long Video: `VIDEO` | Save Video: `video` | Save the assembled video with audio |
+| Long Video: `prompt_preview` | An optional text-display node | Inspect segment prompts and timing after execution |
+
+The two `prompt_api` connections serve different operations. Connect both to use both AI editing and segment planning; either can be omitted. The H3 `clip` text encoder is separate from the optional prompt-planning LLM.
+
+The screenshot's **resolution selector** is an optional external node, not part of this pack. Connect its integer outputs to `width` and `height`, or set those values directly in Long Video's advanced inputs. Screenshot values are examples, not node defaults.
+
+### H3 Model Loader
+
+**H3 Model Loader is a subgraph in the example workflow**, not another registered node. It groups standard ComfyUI loaders:
+
+| Subgraph field | Standard loader / setting | Model location |
+| --- | --- | --- |
+| `unet_name` | Load Diffusion Model (`UNETLoader`) | `models/diffusion_models` |
+| `clip_name` | Load CLIP (`CLIPLoader`), type `minimax` | `models/text_encoders` |
+| `vae_name` | Load VAE: H3 video VAE | `models/vae` |
+| `vae_name_1` | Load VAE: H3 audio VAE | `models/vae` |
+
+Select matching installed H3 weights; replace example filenames with your local choices. The pack does not download models. With reference pictures, select a **Ref2VA** diffusion model. Without references, use a compatible **FL2VA/T2VA** model; connecting `first_frame` selects the image-to-video path. References remain attached to every segment, while `first_frame` only anchors the opening. Both image inputs can be connected together with a Ref2VA model.
+
+## H3 Ref Prompt Builder
+
+Edits six Ref2VA sections and outputs `prompt` (`STRING`) and `reference_images` (`IMAGE`). Manual use needs no LLM.
+
+1. Click **＋ 添加图片**, drop files or paste images. Cards become `<Picture 1>`, `<Picture 2>`, etc. in order.
+2. Fill the fields below. Click a thumbnail to insert its reference, or type `<Pic` / `<Sub` and use arrow keys plus Tab/Enter to complete it.
+3. Inspect the live preview, then run. Manual execution joins the section headings and your text without AI rewriting.
+
+| Field | What to enter |
+| --- | --- |
+| `subject_definitions` — 主体定义 | Define each `<Subject N>` and explicitly bind its source `<Picture N>`. One subject may use several pictures; subject and picture numbers need not match. |
+| `summary` — 内容概述 | A short overview with `[reference generation]`, or `[keyframe completion + reference generation]` when using a first frame/keyframe. |
+| `retention_analysis` — 参考保留规则 | Reference features to preserve. Use `fully_preserved`, `partially_preserved`, `attribute_transfer` or `weak_reference` as appropriate. |
+| `detailed_description` — 画面与动作时间线 | Style, composition, actions, camera, timed dialogue and local sound effects. Write times against the **whole final video**. |
+| `overall_soundscape` — 整体环境声 | Shared ambience and overall sound balance; place location-specific sounds in their own scene/time range. |
+| `non_diegetic_music` — 背景音乐 | Requested background music, or `None` for none. |
+
+A subject definition can be `<Subject 1> is the man wearing a dark shirt in <Picture 1>.` Use `[Shot 1]` for the opening and `[Shot 2] At 00:06.000, ...` for a cut at six seconds. Event ranges such as `0–3 seconds: ...` describe actions within a shot; they do not imply a cut. Keep the prompt's duration consistent with `total_seconds`. **填入中文示例** supplies an editable example; adapt its identities and timings to your pictures.
+
+**Pictures:** drag cards or use arrows to reorder; picture references in the fields are renumbered together. **换** replaces a picture while keeping its number. Removing a picture marks its references as deleted; correct those before generating. Different sizes are padded for batching; animated files use the first frame. You can skip Builder and use **Load Image → Batch Images → reference_images**, as in the [alternative connection example](docs/images/long-video-connections.png).
+
+**Import:** expand **导入整段提示词**. **按标题拆分填入** recognizes the six English field names above, optionally with Markdown headings or colons, without an LLM. Missing sections keep existing text. **AI 转成六段** converts free-form text with the connected Prompt API/Local model.
+
+**AI editing:** connect `prompt_api` and click **AI 整理** to revise current fields. AI import/edit queues only Builder and its dependencies, without starting video generation. Results refill the editor; if you edit while waiting, they stay pending until **应用 AI 结果**. **撤销上次操作** restores the previous state. Use the AI buttons on the main canvas.
+
+**AI 识别参考图** is on by default. AI import/edit sends copies resized proportionally to at most 1024 px on the long edge, as JPEG quality 85, in picture order. The model must support images; turn this off for text-only models. Remote APIs receive these compressed images; local models use AutoProcessor. H3 uses the source pictures, with padding when batching, rather than the compressed AI copies. Running Builder manually does not send an AI request.
+
+## H3 Prompt API
+
+Outputs an `H3_PROMPT_API` configuration. This node alone makes no request. Builder uses it when you click an AI button; Long Video uses it for multiple segments.
+
+| Parameter | Default | Usage |
+| --- | --- | --- |
+| `api_url` | `https://api.deepseek.com` | Chat Completions base URL, including `/v1` if required, or the full `/chat/completions` endpoint. Local-server example: `http://127.0.0.1:11434/v1`. |
+| `model` | `deepseek-flash` | Model ID served by that endpoint. Use a vision model for Builder image recognition. |
+| `api_key` | Empty | Key without `Bearer`; leave empty for an unauthenticated local server. |
+| `json_mode` | `true` | Requests `response_format=json_object`. Turn off if unsupported; valid JSON is still required. No tool calling needed. |
+| `max_tokens` | `16384` | Output budget per request. Increase for truncated responses within provider limits. |
+| `timeout_seconds` | `180` | Request timeout setting. |
+| `variation` | `0` | Change to request a new prompt adaptation on the next execution. |
+| `log_prompts` | `true` | Save AI requests/replies; also gates a connected Builder's logs. |
+
+For long videos, the planner checks explicit times and speech boundaries, then writes prompts for actual segment windows, including overlap. It may rebalance or lengthen segments to avoid cutting dialogue. Without explicit times, it reuses the original prompt after the timing check. A single-segment video skips planning entirely. Planning errors stop generation before sampling. The code requests low reasoning effort for `deepseek-flash` on the official DeepSeek endpoint.
+
+The eye button only hides the key on screen. Keys may still be serialized into workflows, history or output metadata; remove them before sharing those files.
+
+## H3 Prompt Local (experimental)
+
+An alternative to Prompt API with the same `prompt_api` output. Put a complete Transformers instruction-model folder under `ComfyUI/models/LLM/<model-name>/`, including config, tokenizer/chat template and weights. Vision use also needs processor files. Additional `LLM` roots in `extra_model_paths.yaml` are supported. Select the folder in `model_name`.
+
+| Parameter | Default | Usage |
+| --- | --- | --- |
+| `device` | `auto` | ComfyUI's current device; `cpu` avoids GPU use but is slower. |
+| `free_vram_before_load` | `true` | Offloads ComfyUI models before loading the LLM. They reload when needed for H3. |
+| `quantization` | `none` | `nf4` loads unquantized weights in 4-bit with bitsandbytes, without changing the files. |
+| `dtype` | `auto` | Optional dtype: `bfloat16`, `float16` or `float32`. |
+| `max_tokens` / `timeout_seconds` | `16384` / `600` | Per-generation output budget and timeout; loading time is excluded. |
+| `variation` / `log_prompts` | `0` / `true` | Same purpose as Prompt API. |
+
+The LLM loads for AI editing or multi-segment planning and unloads afterward, including on failure/cancellation, before H3 generation. It reads local weights only: no automatic downloads, remote-code loading or required API server. GGUF is not supported. Use a Transformers version supporting your model; the local setup was tested with Qwen3.5 and Transformers 5.3.0. For a 9B model on a 16GB GPU, use `nf4` with bitsandbytes and keep `free_vram_before_load` enabled. Actual memory use and prompt adherence depend on the model and input.
+
+## H3 Long Video (Simple)
+
+Connect the four model inputs, a prompt and **Save Video**. The node calculates segment count, samples continuations from the previous video/audio latent, removes overlap and joins at **24 fps**. No manual Save/Load Latent or Chain nodes are needed for this path.
+
+| Parameter | Default | Usage |
+| --- | --- | --- |
+| `total_seconds` | `30` | Final duration, rounded to the nearest frame at 24 fps. |
+| `seed` | `0` | Segment seeds are `seed + segment index` (starting at 0). Use fixed seed control to repeat a run. |
+| `width` / `height` | `960` / `544` | Output size, rounded up to multiples of 32, minimum 32. |
+| `segment_seconds` | `15` | Target sampled duration **including overlap**, not new content per segment. |
+| `steps` | `20` | Sampling steps per segment. |
+| `sampler_name` / `scheduler` | `res_multistep` / `simple` | Native ComfyUI sampler and schedule. |
+| `context_length` | `22` | Video overlap in frames: `5`, `22`, `39`, `56`. Trimmed from each continuation. |
+| `audio_context_length` | `24` | Audio continuation window in video-frame units; `0` uses the video overlap span. |
+| `tiled_decode` | `true` | Native tiled video VAE decoding to reduce decoding memory. |
+| `log_prompts` | `true` | Saves actual planned sampling prompts/settings before sampling. |
+
+Most controls after seed are advanced inputs. With `total_seconds=24` and `segment_seconds=12`, the node calculates the segments itself. H3 frame alignment, overlap and dialogue protection can change sampled durations; final retained frames still target `total_seconds`. The final segment may extend by about a second before frame alignment to avoid a tiny extra segment. Shorter segments are not necessarily faster because each adds encoding, decoding and continuation overhead.
+
+Without `prompt_api`, all segments reuse the prompt. With it, multi-segment planning converts whole-video timestamps to segment-local timing. `prompt_preview` describes the final prompts and windows. Long Video returns a temporary assembled `VIDEO`; connect **Save Video** to keep a file in the output directory.
+
+## Logs and troubleshooting
+
+Logs go to `ComfyUI/output/h3_prompt_logs/`, with readable TXT and structured JSON sharing a task ID (`prompt_id`) for queue/history lookup.
+
+| File suffix | Contents | Switch |
+| --- | --- | --- |
+| `*_builder` | Input fields, final prompt, AI system/user messages/replies, image metadata; the editor shows the latest path | Builder `log_prompts` and, when connected, Prompt API/Local `log_prompts` |
+| `*_planner` | Timing analysis and segment-rewrite requests/replies, including failures | Prompt API/Local `log_prompts` |
+| `*_video` | Original prompt, actual segment prompts/timing, seeds and sampling settings, before sampling | Long Video `log_prompts`, independently |
+
+`prepared` means ready to sample, not completed generation. Builder logs describe its output; use video logs for downstream adaptations. Video logs are written even if Builder is cached or no LLM is connected, provided Long Video executes. A fully cached run creates no new logs. Credentials, image bytes and separate reasoning fields are omitted; prompt text is retained.
+
+- **No editor/new inputs after updating:** restart ComfyUI and refresh the browser; check duplicate installations.
+- **Missing native Concatenate Video:** update ComfyUI and restart.
+- **AI rejects images:** select a vision model or turn off **AI 识别参考图**. Text-only segment planning needs no vision.
+- **Invalid/truncated JSON:** check endpoint/model and `json_mode`, increase `max_tokens` for truncation, or change `variation` and retry.
+- **No local model listed:** check for `config.json` in a complete model folder under `models/LLM`, then refresh/restart.
+
+## Original chaining nodes
+
+**H3 Motion Context**, **Trim**, **Save Latent**, **Load Latent**, **Chain** and **Seam Probe** remain available for manual chaining and diagnostics. See [original usage documentation](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context#readme) and the [original workflow](example_workflows/MiniMax%20H3%20-%20fl2va%20-%20ref2va.json).
+
+[GPL-3.0 license](LICENSE)
