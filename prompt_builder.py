@@ -17,7 +17,6 @@ import torch.nn.functional as F
 import folder_paths
 from comfy_api.latest import io
 
-from .prompt_local import local_prompt_request
 from .prompt_log import new_prompt_log_path, prompt_request_log, prompt_trace_text, write_prompt_log
 from .prompt_planner import chat_endpoint, read_json_message, request_chat
 
@@ -204,7 +203,7 @@ def rewrite_fields(fields, picture_count, config, image_paths=(), log_path=None)
     if content:
         content.append({"type": "text", "text": source})
     payload = {
-        "model": config.get("model_name") if config.get("backend") == "local" else config["model"],
+        "model": config["model"],
         "max_tokens": config.get("max_tokens", 4096), "stream": False,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -215,18 +214,11 @@ def rewrite_fields(fields, picture_count, config, image_paths=(), log_path=None)
     result, responses = None, []
     _LOG.info("H3 Prompt Builder: %s, %d images, %.1f KiB JPEG", payload["model"], len(pictures), sum(p["jpeg_bytes"] for p in pictures) / 1024)
     try:
-        if config.get("backend") == "local":
-            options = {key: config[key] for key in (
-                "model_name", "device", "dtype", "free_vram_before_load", "timeout_seconds", "quantization"
-            ) if key in config}
-            with local_prompt_request(**options, with_images=bool(image_paths)) as request:
-                data = request(payload)
-        else:
-            if config.get("json_mode", True):
-                payload["response_format"] = {"type": "json_object"}
-            key = config.get("api_key", "").strip()
-            data = request_chat(chat_endpoint(config["api_url"]), payload,
-                                {"Authorization": f"Bearer {key}"} if key else {}, config.get("timeout_seconds", 600))
+        if config.get("json_mode", True):
+            payload["response_format"] = {"type": "json_object"}
+        key = config.get("api_key", "").strip()
+        data = request_chat(chat_endpoint(config["api_url"]), payload,
+                            {"Authorization": f"Bearer {key}"} if key else {}, config.get("timeout_seconds", 600))
         values = read_json_message(data, responses, "H3 fields")
         if not isinstance(values, dict) or any(not isinstance(values.get(name), str) for name in FIELDS):
             raise ValueError("AI 没有返回完整的六个文本字段。原文未改动，请重试或增加 max_tokens。")
@@ -246,7 +238,7 @@ class MiniMaxH3PromptBuilder(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3PromptBuilder", display_name="H3 Ref Prompt Builder",
             category="video/minimax", is_output_node=True,
-            description="Ref2VA 六段提示词与图片编辑器。直接填写即可使用；连接 H3 Prompt Local/API 后可点击 AI 整理。",
+            description="Ref2VA 六段提示词与图片编辑器。直接填写即可使用；连接 H3 Prompt API 后可点击 AI 整理。",
             inputs=[
                 *[io.String.Input(name, default="None" if name == "non_diegetic_music" else "",
                                   multiline=True, tooltip=label) for name, label in zip(FIELDS, LABELS)],
@@ -256,7 +248,7 @@ class MiniMaxH3PromptBuilder(io.ComfyNode):
                 io.Boolean.Input("ai_read_images", default=True, optional=True,
                                  tooltip="AI 读取压缩后的参考图。需要视觉模型；关闭后仅处理文字。"),
                 io.Boolean.Input("log_prompts", default=True, optional=True,
-                                 tooltip="保存原文、最终提示词和 AI 输入/回复到 output/h3_prompt_logs。连接的 Prompt Local/API 也需开启 log_prompts。"),
+                                 tooltip="保存原文、最终提示词和 AI 输入/回复到 output/h3_prompt_logs。连接的 Prompt API 也需开启 log_prompts。"),
             ],
             outputs=[io.String.Output(display_name="prompt"), io.Image.Output(display_name="reference_images")],
         )
@@ -280,7 +272,7 @@ class MiniMaxH3PromptBuilder(io.ComfyNode):
         log_path = new_prompt_log_path("builder") if log_enabled else None
         if ai_request:
             if prompt_api is None:
-                raise ValueError("请先连接 H3 Prompt Local 或 H3 Prompt API，再点击 AI 整理。手动填写无需 LLM。")
+                raise ValueError("请先连接 H3 Prompt API，再点击 AI 整理。手动填写无需 LLM。")
             fields = rewrite_fields(fields, len(paths), {**prompt_api, "log_prompts": log_enabled},
                                     paths if ai_read_images else (), log_path=log_path)
         prompt = assemble_prompt(fields)

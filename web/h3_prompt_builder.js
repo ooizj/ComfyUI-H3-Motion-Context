@@ -140,7 +140,7 @@ function install(node) {
   logInput.type = "checkbox";
   logInput.onchange = () => { widgets.log_prompts.value = logInput.checked; changed(); };
   logLabel.append(logInput, element("span", "", "保存提示词日志"));
-  const logLocation = element("div", "h3pb-note", "日志目录：output/h3_prompt_logs。保存原文、最终提示词及 AI 输入/回复（TXT + JSON）。连接的 Prompt Local/API 也需开启 log_prompts。");
+  const logLocation = element("div", "h3pb-note", "日志目录：output/h3_prompt_logs。保存原文、最终提示词及 AI 输入/回复（TXT + JSON）。连接的 Prompt API 也需开启 log_prompts。");
   logLocation.style.overflowWrap = "anywhere";
   root.append(logLabel, logLocation);
   const textareas = {};
@@ -354,7 +354,7 @@ function install(node) {
   async function requestAI(source = null) {
     if (pending || uploading) return;
     const configInput = node.inputs.find(i => i.name === "prompt_api");
-    if (configInput?.link == null) { setStatus("连接 H3 Prompt Local 或 H3 Prompt API 后即可使用；手动编辑无需连接。"); return; }
+    if (configInput?.link == null) { setStatus("连接 H3 Prompt API 后即可使用；手动编辑无需连接。"); return; }
     aiBtn.disabled = importAiBtn.disabled = true;
     try {
       const before = JSON.stringify(snapshot());

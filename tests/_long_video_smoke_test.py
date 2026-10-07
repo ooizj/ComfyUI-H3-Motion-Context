@@ -12,7 +12,6 @@ import sys
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-from transformers import BatchEncoding
 
 PACKAGE = Path(__file__).resolve().parents[1]
 COMFY_ROOT = Path(os.environ.get("COMFYUI_ROOT", PACKAGE.parent.parent))
@@ -32,7 +31,6 @@ long = importlib.import_module(PACKAGE.name + ".long_video")
 motion = importlib.import_module(PACKAGE.name + ".nodes")
 planner = importlib.import_module(PACKAGE.name + ".prompt_planner")
 timing = importlib.import_module(PACKAGE.name + ".prompt_timing")
-local = importlib.import_module(PACKAGE.name + ".prompt_local")
 
 
 def test_progress_scope():
@@ -73,112 +71,6 @@ def test_progress_scope():
         except RuntimeError as error:
             assert str(error) == "cancelled before start"
         assert long.comfy.utils.PROGRESS_BAR_HOOK is cancelled_hook
-
-
-def test_local_prompt():
-    full_prompt = "From 0-3s the man waves. From 11-14s they toast."
-    expected = ["From 0 to 3 seconds, the man waves.", "From 3.92 to 6.92 seconds, they toast."]
-    replies = [json.dumps({"has_explicit_times": True, "speech": []}), json.dumps({"prompts": expected})]
-    lifecycle = []
-
-    class Model(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.weight = torch.nn.Parameter(torch.empty(1))
-            self.generation_config = SimpleNamespace(eos_token_id=2)
-            self.calls = 0
-            self.error = None
-
-        @property
-        def device(self):
-            return self.weight.device
-
-        def generate(self, **kwargs):
-            lifecycle.append("generate")
-            if self.error:
-                raise self.error
-            kwargs["stopping_criteria"][0](None, None)
-            self.calls += 1
-            return torch.tensor([[9, self.calls]], device=self.device)
-
-    model = Model()
-    tokenizer = MagicMock(chat_template="chat", pad_token_id=0)
-    tokenizer.apply_chat_template.side_effect = lambda *args, **kwargs: BatchEncoding({"input_ids": torch.tensor([[9]])})
-    tokenizer.decode.side_effect = lambda tokens, **kwargs: replies[int(tokens[0]) - 1]
-    schedule = planner.segment_schedule(long.plan_segments(14, 7.5, 22))
-    original_loaded = local.comfy.model_management.loaded_models()
-    with tempfile.TemporaryDirectory() as temp, \
-            patch.dict(folder_paths.folder_names_and_paths, {"LLM": ([temp], set())}), \
-            patch.object(local.AutoConfig, "from_pretrained", return_value=SimpleNamespace(model_type="qwen3")), \
-            patch.object(local.AutoTokenizer, "from_pretrained", return_value=tokenizer), \
-            patch.object(local.AutoModelForCausalLM, "from_pretrained", return_value=model) as load, \
-            patch.object(local.comfy.model_management, "free_memory", wraps=local.comfy.model_management.free_memory) as free:
-        model_dir = Path(temp) / "small-model"
-        model_dir.mkdir()
-        (model_dir / "config.json").write_text("{}")
-        assert local.local_model_names() == ["small-model"]
-        assert local.local_model_path("small-model") == model_dir.resolve()
-        for name in ["../small-model", str(Path(temp).parent)]:
-            try:
-                local.local_model_path(name)
-            except FileNotFoundError:
-                pass
-            else:
-                raise AssertionError("Model paths must remain inside the LLM roots")
-        info = local.MiniMaxH3PromptLocal.GET_NODE_INFO_V1()
-        assert tuple(info["output"]) == ("H3_PROMPT_API",)
-        settings, = local.MiniMaxH3PromptLocal.execute("small-model", device="cpu", log_prompts=False).result
-        assert settings.pop("backend") == "local"
-        load.assert_not_called()
-        result = local.split_local_prompts(full_prompt, schedule, "Ref2VA", 0, **settings)
-        assert result[0] == schedule
-        assert result[1] == expected
-        assert lifecycle == ["generate", "generate"]
-        assert load.call_args.kwargs["local_files_only"] is True
-        assert load.call_args.kwargs["trust_remote_code"] is False
-        assert load.call_args.kwargs["dtype"] == torch.float32
-        second_messages = tokenizer.apply_chat_template.call_args.args[0]
-        assert len(second_messages) == 2
-        assert len(json.loads(second_messages[-1]["content"])["clips"]) == 2
-        assert "tools" not in tokenizer.apply_chat_template.call_args.kwargs
-        assert local.comfy.model_management.loaded_models() == original_loaded
-        # The CPU path must not evict GPU models before loading.
-        assert free.call_count == 1
-        model.calls = 0
-        previous_async_load = os.environ.get("HF_DEACTIVATE_ASYNC_LOAD")
-        result = local.split_local_prompts(full_prompt, schedule, "T2VA", 0, **{**settings, "quantization": "nf4"})
-        assert result[0] == schedule and len(result[1]) == 2
-        assert load.call_args.kwargs["quantization_config"].load_in_4bit
-        assert load.call_args.kwargs["device_map"] == {"": torch.device("cpu")}
-        assert os.environ.get("HF_DEACTIVATE_ASYNC_LOAD") == previous_async_load
-        assert local.comfy.model_management.loaded_models() == original_loaded
-        for error in [RuntimeError("generation failed"), local.comfy.model_management.InterruptProcessingException()]:
-            model.error = error
-            with patch.object(local.comfy.model_patcher.ModelPatcher, "unpatch_model", autospec=True) as offload:
-                try:
-                    local.split_local_prompts(full_prompt, schedule, "T2VA", 0, **settings)
-                except type(error):
-                    pass
-                else:
-                    raise AssertionError("Generation errors and cancellation must propagate")
-                assert offload.called
-                assert offload.call_args.args[1] == torch.device("cpu")
-            assert local.comfy.model_management.loaded_models() == original_loaded
-            with patch.object(model, "to", wraps=model.to) as offload:
-                try:
-                    local.split_local_prompts(full_prompt, schedule, "T2VA", 0, **{**settings, "quantization": "nf4"})
-                except type(error):
-                    pass
-                else:
-                    raise AssertionError("Quantized generation errors and cancellation must propagate")
-                offload.assert_called_once_with("cpu")
-    try:
-        local.PromptStoppingCriteria(-1)(None, None)
-    except TimeoutError:
-        pass
-    else:
-        raise AssertionError("Local generation must honor its timeout")
-    assert local.local_response(replies[0], 2, 3, True)["choices"][0]["finish_reason"] == "length"
 
 
 class Clip:
@@ -419,7 +311,6 @@ def test_dialogue_boundaries():
 
 def main():
     test_progress_scope()
-    test_local_prompt()
     test_dialogue_boundaries()
     with tempfile.TemporaryDirectory() as log_root, \
             patch.object(folder_paths, "get_output_directory", return_value=log_root):
@@ -573,11 +464,11 @@ def main():
                 assert clip.texts == [full_prompt]
 
             samples.clear()
-            with patch.object(long, "split_local_prompts") as split:
-                local_settings, = local.MiniMaxH3PromptLocal.execute("unused-model").result
+            with patch.object(long, "split_prompts") as split:
                 node.execute(None, Clip(), VideoVAE(), AudioVAE(), full_prompt, 14,
-                             width=32, height=32, prompt_api=local_settings)
+                             width=32, height=32, segment_seconds=5)
                 split.assert_not_called()
+                assert len(samples) == 3
 
             samples.clear()
             with patch.object(long, "split_prompts", side_effect=RuntimeError("API failed")):

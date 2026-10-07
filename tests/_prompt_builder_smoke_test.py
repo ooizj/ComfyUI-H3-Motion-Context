@@ -29,7 +29,7 @@ def main():
                   detailed_description="[Shot 1] 0–3 秒：走近。\n[Shot 2] At 00:03.000, 转为近景。",
                   non_diegetic_music="None")
     with patch.object(builder, "rewrite_fields", side_effect=AssertionError("manual mode called LLM")), CurrentNodeContext("builder-smoke", "42"):
-        result = builder.MiniMaxH3PromptBuilder.execute(**fields, prompt_api={"backend": "local"})
+        result = builder.MiniMaxH3PromptBuilder.execute(**fields, prompt_api={"model": "test"})
     assert result[0] == builder.assemble_prompt(fields) and result[1] is None
     assert result.ui["h3_fields"][0] == fields
     manual_path = Path(result.ui["h3_log"][0])

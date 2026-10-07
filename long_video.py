@@ -27,7 +27,6 @@ from comfy_extras.nodes_minimax_h3 import (
 
 from .nodes import FPS, MiniMaxH3MotionContext, MiniMaxH3MotionContextTrim
 from .prompt_planner import prompt_preview, segment_schedule, split_prompts
-from .prompt_local import split_local_prompts
 from .prompt_log import new_prompt_log_path, write_prompt_log
 
 _LOG = logging.getLogger("h3_motion_context")
@@ -135,9 +134,9 @@ class MiniMaxH3LongVideo(io.ComfyNode):
                 io.Image.Input("reference_images", optional=True,
                     tooltip="Optional image batch for a Ref2VA model. Every image is a reference: <Picture 1>, <Picture 2>, etc. Use Image Batch to combine images. References stay attached throughout the chain."),
                 io.Custom("H3_PROMPT_API").Input("prompt_api", optional=True,
-                    tooltip="Connect H3 Prompt API or H3 Prompt Local. The video node supplies the complete prompt, actual segment timings and image mode automatically. A single-segment video uses the original prompt without calling or loading a language model."),
+                    tooltip="Connect H3 Prompt API for automatic segment prompts. Leave disconnected to reuse the original prompt without API calls. A single-segment video also skips the API."),
                 io.Boolean.Input("log_prompts", default=True, optional=True, advanced=True,
-                    tooltip="Save the input and final per-segment prompts, seeds and task ID to output/h3_prompt_logs before sampling, including when Prompt Builder is cached. Prompt Local/API log_prompts controls AI planning logs separately."),
+                    tooltip="Save the input and final per-segment prompts, seeds and task ID to output/h3_prompt_logs before sampling, including when Prompt Builder is cached. Prompt API log_prompts controls AI planning logs separately."),
             ],
             outputs=[io.Video.Output(), io.String.Output(display_name="prompt_preview")],
         )
@@ -156,11 +155,7 @@ class MiniMaxH3LongVideo(io.ComfyNode):
         reference_count = len(reference_images) if reference_images is not None else 0
         if prompt_api is not None and len(plan) > 1:
             input_mode = "Ref2VA" if reference_count else "I2VA" if first_frame is not None else "T2VA"
-            if prompt_api.get("backend") == "local":
-                settings = {key: value for key, value in prompt_api.items() if key != "backend"}
-                schedule, prompts = split_local_prompts(prompt, schedule, input_mode, reference_count, **settings)
-            else:
-                schedule, prompts = split_prompts(prompt, schedule, input_mode, reference_count, **prompt_api)
+            schedule, prompts = split_prompts(prompt, schedule, input_mode, reference_count, **prompt_api)
             plan = [(s["sampled_frames"], s["overlap_frames"], s["retained_frames"]) for s in schedule]
         _LOG.info("H3 Long Video: %.3fs output, %d segment(s), %.3fs sampled before trimming",
                   sum(keep for _, _, keep in plan) / FPS, len(plan), sum(length for length, _, _ in plan) / FPS)
