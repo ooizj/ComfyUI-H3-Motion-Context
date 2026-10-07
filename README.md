@@ -10,7 +10,12 @@ Install under `ComfyUI/custom_nodes`, restart and refresh the browser. Requires 
 git clone https://github.com/ooizj/ComfyUI-H3-Motion-Context.git comfyui-h3-motion-context
 ```
 
-Example workflow: [H3 Long Video - Simple](example_workflows/H3%20Long%20Video%20-%20Simple.json). Select your installed models and images after importing. The example retains LoRA/attention settings inside its model subgraph; adjust them to your installation. API keys have been cleared from the published file; enter your own only when using the API.
+Example workflows:
+
+- [H3 Long Video - Simple](example_workflows/H3%20Long%20Video%20-%20Simple.json): enter the prompt directly and load the first frame and references with image nodes.
+- [H3 Long Video - Ref Prompt Builder](example_workflows/H3%20Long%20Video%20-%20Ref%20Prompt%20Builder.json): manage reference pictures and six prompt sections in the editor, then connect it to Long Video.
+
+Select your installed models and images after importing. The examples retain LoRA/attention settings inside their model subgraphs; adjust them to your installation. The Builder example also includes a resolution selector; if unavailable, set Long Video's width and height directly. API keys have been cleared from the published files; enter your own only when using the API.
 
 ## H3 Ref Prompt Builder
 

@@ -10,7 +10,12 @@
 git clone https://github.com/ooizj/ComfyUI-H3-Motion-Context.git comfyui-h3-motion-context
 ```
 
-示例工作流：[H3 Long Video - Simple](example_workflows/H3%20Long%20Video%20-%20Simple.json)。导入后选择本机模型和图片；示例保留了模型子图中的 LoRA / 注意力设置，请按本机安装调整。发布文件中的 API 密钥已清空，需要调用时再填写自己的密钥。
+示例工作流：
+
+- [H3 Long Video - Simple](example_workflows/H3%20Long%20Video%20-%20Simple.json)：直接填写提示词，使用图片加载节点输入首帧和参考图。
+- [H3 Long Video - Ref Prompt Builder](example_workflows/H3%20Long%20Video%20-%20Ref%20Prompt%20Builder.json)：使用参考提示词编辑器管理图片和六段提示词，再连接长视频节点。
+
+导入后选择本机模型和图片；示例保留了模型子图中的 LoRA / 注意力设置，请按本机安装调整。Builder 示例还包含分辨率选择器，未安装时可直接设置 Long Video 的宽高。发布文件中的 API 密钥已清空，需要调用时再填写自己的密钥。
 
 ## H3 Ref Prompt Builder
 
