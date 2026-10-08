@@ -17,6 +17,18 @@ Example workflows:
 
 Select your installed models and images after importing. The examples retain LoRA/attention settings inside their model subgraphs; adjust them to your installation. The Builder example also includes a resolution selector; if unavailable, set Long Video's width and height directly. API keys have been cleared from the published files; enter your own only when using the API.
 
+## H3 Image & Prompt
+
+[![H3 Image & Prompt example](docs/images/image-and-prompt.png)](docs/images/image-and-prompt.png)
+
+Find it under `video/minimax`. Add, drop or paste pictures and enter a prompt in one text field. Replace pictures or reorder them with the arrows; `<Picture N>` references update with the order. Click a thumbnail to insert its reference.
+
+Connect `prompt` and `reference_images` to a generation node. The prompt is passed through unchanged; pictures follow the displayed order and are padded without cropping when their sizes differ. Text-only output is supported.
+
+**backup** saves the original pictures, `prompt.txt` and a manifest with image order, sources and hashes in a new timestamped folder under `ComfyUI/output/h3_prompt_backups` (following ComfyUI's output directory). The node displays the full path. Backups never overwrite earlier saves, and normal queue execution does not create backups.
+
+**load** opens a list of backups, newest first, with thumbnails, image counts and prompt excerpts. Select one to preview all pictures and the full prompt, then click **载入所选备份** to replace the node contents. Cancel leaves the current contents unchanged. Loaded pictures come from the backup copies, so the original uploads are not required.
+
 ## H3 Ref Prompt Builder
 
 [![H3 Ref Prompt Builder example](docs/images/ref-prompt-builder.png)](docs/images/ref-prompt-builder.png)

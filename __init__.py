@@ -46,6 +46,11 @@ from .prompt_builder import (
     NODE_CLASS_MAPPINGS as _BUILDER_CLASSES,
     NODE_DISPLAY_NAME_MAPPINGS as _BUILDER_NAMES,
 )
+from .prompt_backup import (
+    NODE_CLASS_MAPPINGS as _BACKUP_CLASSES,
+    NODE_DISPLAY_NAME_MAPPINGS as _BACKUP_NAMES,
+    register_backup_routes,
+)
 
 NODE_CLASS_MAPPINGS.update(_PROBE_CLASSES)
 NODE_DISPLAY_NAME_MAPPINGS.update(_PROBE_NAMES)
@@ -55,7 +60,10 @@ NODE_CLASS_MAPPINGS.update(_PLANNER_CLASSES)
 NODE_DISPLAY_NAME_MAPPINGS.update(_PLANNER_NAMES)
 NODE_CLASS_MAPPINGS.update(_BUILDER_CLASSES)
 NODE_DISPLAY_NAME_MAPPINGS.update(_BUILDER_NAMES)
+NODE_CLASS_MAPPINGS.update(_BACKUP_CLASSES)
+NODE_DISPLAY_NAME_MAPPINGS.update(_BACKUP_NAMES)
 register_chain_routes()
+register_backup_routes()
 
 logging.getLogger("h3_motion_context").info(
     "h3_motion_context: nodes registered. ComfyUI is not modified; the "

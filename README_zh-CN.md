@@ -17,6 +17,18 @@ git clone https://github.com/ooizj/ComfyUI-H3-Motion-Context.git comfyui-h3-moti
 
 导入后选择本机模型和图片；示例保留了模型子图中的 LoRA / 注意力设置，请按本机安装调整。Builder 示例还包含分辨率选择器，未安装时可直接设置 Long Video 的宽高。发布文件中的 API 密钥已清空，需要调用时再填写自己的密钥。
 
+## H3 Image & Prompt
+
+[![H3 Image & Prompt 使用示例](docs/images/image-and-prompt.png)](docs/images/image-and-prompt.png)
+
+在 `video/minimax` 分类中添加。包含图片区、提示词输入框、**backup** 和 **load** 按钮；支持多选、拖入、粘贴、替换和箭头排序。点击缩略图插入 `<Picture N>`，排序时同步更新提示词中的编号。
+
+输出 `prompt`（提示词原文）和 `reference_images`（按界面顺序排列的图片），可直接连接生成节点。图片尺寸不同时与 Ref Prompt Builder 一样补边组批，不裁切；没有图片时仍可单独输出提示词。
+
+点击 **backup** 直接保存，无需运行队列。固定目录为 `ComfyUI/output/h3_prompt_backups`（跟随 ComfyUI 输出目录），节点显示完整路径。每次创建独立的时间戳子目录，包含原图 `Picture_01.*` 等、原文 `prompt.txt` 和记录图片顺序、来源及哈希的 `manifest.json`；不会覆盖旧备份。图片和提示词也随工作流保存，普通运行不会自动备份。
+
+点击 **load** 浏览备份，按时间倒序显示缩略图、图片数量和提示词摘要。选中后可预览全部图片和完整提示词，再点击 **载入所选备份** 替换节点内容；取消不改动当前内容。载入使用备份中的图片副本，不依赖原来的上传图片。
+
 ## H3 Ref Prompt Builder
 
 [![H3 Ref Prompt Builder 使用示例](docs/images/ref-prompt-builder.png)](docs/images/ref-prompt-builder.png)
