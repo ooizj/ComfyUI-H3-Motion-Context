@@ -8,6 +8,20 @@ rejected any keyframe anchor other than the first or last frame. That
 landed in ComfyUI 0.34.0. Every release through 0.33.4 has the older
 layout. Each entry below says which of the two it works with.
 
+## 0.7.0 - 2026-10-10
+
+Requires ComfyUI 0.36.0 or newer for Long Video (native Concatenate Video).
+Published to the Comfy Registry as `comfyui-h3-long-video` by `misaka`.
+Node ids are unchanged, so uninstall the original H3 Motion Context first.
+
+- H3 Long Video (Simple): one prompt and a total duration produce one video;
+  segments are sampled with motion/audio continuation and joined.
+- H3 Prompt API: optional Chat Completions settings that split the prompt
+  into timed segment prompts before sampling.
+- H3 Ref Prompt Builder: six-field Ref2VA editor with reference pictures and
+  an optional AI rewrite.
+- H3 Image & Prompt: image and prompt editor with timestamped backups.
+
 ## 0.6.2 - 2026-09-06
 
 Requires ComfyUI 0.34.0 or newer. Use 0.3.1 on anything older.

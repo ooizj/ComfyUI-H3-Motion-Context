@@ -1,14 +1,15 @@
 [project]
-name = "comfyui-h3-motion-context"
-description = "Clip chaining for MiniMax H3 in ComfyUI: pin the tail of the previous clip, picture and sound, so the next clip genuinely continues it. The picture is sliced out of the previous latent with no VAE round trip, and the pinned audio window ends at the join and reaches backwards, so the soundtrack continues rather than restarts. ComfyUI is not modified. Node ids MiniMaxH3MotionContext, MiniMaxH3MotionContextTrim, MiniMaxH3MotionContextSaveLatent, MiniMaxH3MotionContextLoadLatent, MiniMaxH3MotionContextChain, MiniMaxH3MotionContextSeamProbe."
-version = "0.6.2"
+name = "comfyui-h3-long-video"
+description = "Generate long MiniMax H3 videos from one prompt and a total duration. Segments are sampled with motion and audio continuation and joined into one video, with optional LLM prompt splitting, a Ref2VA prompt builder and the clip-chaining nodes. Based on NikoDemon80/ComfyUI-H3-Motion-Context."
+version = "0.7.0"
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
     { name = "NikoDemon80", email = "262659861+NikoDemon80@users.noreply.github.com" },
+    { name = "ooizj", email = "9606965+ooizj@users.noreply.github.com" },
 ]
-keywords = ["comfyui", "minimax-h3", "video-generation", "audio", "clip-chaining", "video-continuation"]
+keywords = ["comfyui", "minimax-h3", "video-generation", "audio", "clip-chaining", "video-continuation", "long-video"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
@@ -22,10 +23,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context"
-Repository = "https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context"
-Issues = "https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context/issues"
+Homepage = "https://github.com/ooizj/ComfyUI-H3-Long-Video"
+Repository = "https://github.com/ooizj/ComfyUI-H3-Long-Video"
+Issues = "https://github.com/ooizj/ComfyUI-H3-Long-Video/issues"
 
 [tool.comfy]
-PublisherId = "nikodemon80"
-DisplayName = "H3 Motion Context"
+PublisherId = "misaka"
+DisplayName = "H3 Long Video"
