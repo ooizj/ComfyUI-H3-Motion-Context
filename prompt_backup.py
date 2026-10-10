@@ -26,9 +26,9 @@ def backup_directory():
 
 def save_backup(prompt, pictures):
     if not isinstance(prompt, str):
-        raise ValueError("提示词必须是文本。")
+        raise ValueError("Prompt must be text.")
     if not isinstance(pictures, list) or any(not isinstance(name, str) for name in pictures):
-        raise ValueError("图片列表必须是文件名数组。")
+        raise ValueError("Pictures must be a list of file names.")
     sources = [Path(folder_paths.get_annotated_filepath(name)) for name in pictures]
     root = backup_directory()
     root.mkdir(parents=True, exist_ok=True)
@@ -60,10 +60,10 @@ def save_backup(prompt, pictures):
 
 def backup_child(directory, name):
     if not isinstance(name, str) or name in ("", ".", "..") or any(char in name for char in "/\\:"):
-        raise ValueError("备份文件名无效。")
+        raise ValueError("Invalid backup file name.")
     path = directory / name
     if not folder_paths.is_within_directory(str(directory), str(path)):
-        raise ValueError("备份路径超出目录。")
+        raise ValueError("Backup path is outside the backup folder.")
     return path
 
 
@@ -71,14 +71,14 @@ def read_backup(backup_id):
     directory = backup_child(backup_directory(), backup_id)
     manifest = json.loads(backup_child(directory, "manifest.json").read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or not isinstance(manifest.get("images"), list):
-        raise ValueError("备份图片清单无效。")
+        raise ValueError("Invalid backup image manifest.")
     pictures = []
     for entry in manifest["images"]:
         if not isinstance(entry, dict):
-            raise ValueError("备份图片记录无效。")
+            raise ValueError("Invalid backup image entry.")
         path = backup_child(directory, entry.get("file"))
         if not path.is_file():
-            raise FileNotFoundError(f"备份图片不存在：{path.name}")
+            raise FileNotFoundError(f"Backup image is missing: {path.name}")
         pictures.append(f"h3_prompt_backups/{backup_id}/{path.name} [output]")
     with backup_child(directory, "prompt.txt").open(encoding="utf-8", newline="") as file:
         prompt = file.read()
@@ -97,7 +97,7 @@ def list_backups():
         try:
             item = read_backup(directory.name)
         except (ValueError, OSError) as error:
-            entries.append({"id": directory.name, "error": f"无法读取：{error}"})
+            entries.append({"id": directory.name, "error": str(error)})
             continue
         entries.append({"id": item["id"], "created_at": item["created_at"],
                         "image_count": len(item["pictures"]), "cover": next(iter(item["pictures"]), None),
@@ -119,7 +119,7 @@ def register_backup_routes():
         try:
             entries = await asyncio.to_thread(list_backups)
         except OSError as error:
-            return web.json_response({"error": f"读取备份列表失败：{error}"}, status=400)
+            return web.json_response({"error": str(error)}, status=400)
         return web.json_response({"backups": entries})
 
     @server.routes.get("/h3_motion_context/prompt_backups/{backup_id}")
@@ -127,7 +127,7 @@ def register_backup_routes():
         try:
             result = await asyncio.to_thread(read_backup, request.match_info["backup_id"])
         except (ValueError, OSError) as error:
-            return web.json_response({"error": f"读取备份失败：{error}"}, status=400)
+            return web.json_response({"error": str(error)}, status=400)
         return web.json_response(result)
 
     @server.routes.post("/h3_motion_context/prompt_backup")
@@ -136,10 +136,10 @@ def register_backup_routes():
         try:
             data = await request.json()
             if not isinstance(data, dict):
-                raise ValueError("备份内容必须是 JSON 对象。")
+                raise ValueError("Backup request must be a JSON object.")
             result = await asyncio.to_thread(save_backup, data.get("prompt", ""), data.get("pictures", []))
         except (ValueError, OSError, SyntaxError, Image.DecompressionBombError) as error:
-            return web.json_response({"error": f"备份失败：{error}"}, status=400)
+            return web.json_response({"error": str(error)}, status=400)
         return web.json_response(result)
 
     register_backup_routes._done = True
@@ -151,7 +151,7 @@ class MiniMaxH3PromptBackup(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3PromptBackup", display_name="H3 Image & Prompt",
             category="video/minimax", is_output_node=True,
-            description="编辑并输出图片和提示词。backup 保存到 output/h3_prompt_backups；load 预览并载入备份。",
+            description="Edit and output images and a prompt. backup saves to output/h3_prompt_backups; load previews and restores a backup.",
             inputs=[io.String.Input("pictures", default="[]"),
                     io.String.Input("prompt", default="", multiline=True)],
             outputs=[io.String.Output(display_name="prompt"), io.Image.Output(display_name="reference_images")],

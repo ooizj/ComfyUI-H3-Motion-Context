@@ -8,15 +8,18 @@ from comfy_extras.nodes_minimax_h3 import align_frame_count
 
 
 _DIALOGUE = re.compile(r"<d>(.*?)</d>", re.DOTALL)
+FULL_WIDTH_SPEAKER = re.compile(r"（(S\d+)）")
 FIRST_FRAME_INSTRUCTION = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."
 
 
+def dialogue_lines(text):
+    return Counter(line.strip() for line in _DIALOGUE.findall(text))
+
+
 def validate_timeline(timeline, source):
-    if not isinstance(timeline, dict) or type(timeline.get("has_explicit_times")) is not bool:
-        raise RuntimeError("LLM must return has_explicit_times and a speech list.")
-    events = timeline.get("speech")
-    if not isinstance(events, list) or (events and not timeline["has_explicit_times"]):
-        raise RuntimeError("LLM returned an invalid speech list.")
+    events = timeline.get("speech") if isinstance(timeline, dict) else None
+    if not isinstance(events, list):
+        raise RuntimeError("LLM must return a speech list.")
     for event in events:
         if not isinstance(event, dict):
             raise RuntimeError("LLM returned an invalid speech range.")
@@ -79,9 +82,7 @@ def validate_prompts(prompts, schedule, events, source, input_mode):
     if (not isinstance(prompts, list) or len(prompts) != len(schedule)
             or any(not isinstance(p, str) or not p.strip() for p in prompts)):
         raise RuntimeError(f"LLM must return {len(schedule)} nonempty prompts.")
-    source_lines = Counter(s.strip() for s in _DIALOGUE.findall(source))
-    output_lines = Counter(s.strip() for s in _DIALOGUE.findall("\n".join(prompts)))
-    if source_lines != output_lines:
+    if dialogue_lines(source) != dialogue_lines("\n".join(prompts)):
         raise RuntimeError("LLM changed, omitted or repeated quoted <d> dialogue. Change variation and retry.")
     owners = {}
     for event in events:
@@ -93,6 +94,7 @@ def validate_prompts(prompts, schedule, events, source, input_mode):
         if any(line.strip() in owners and index not in owners[line.strip()]
                for line in _DIALOGUE.findall(prompt)):
             raise RuntimeError("LLM moved quoted dialogue outside its assigned segment. Change variation and retry.")
+    prompts = [FULL_WIDTH_SPEAKER.sub(r"(\1)", prompt) for prompt in prompts]
     if input_mode == "I2VA":
         prompts[0] = FIRST_FRAME_INSTRUCTION + "\n\n" + prompts[0]
     return prompts

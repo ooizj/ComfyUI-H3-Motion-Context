@@ -1,0 +1,184 @@
+{
+  "MiniMaxH3MotionContext": {
+    "description": "把上一段视频连续的若干帧固定为不去噪的条件行，让模型读取真实运动，而不是只凭一张静帧猜测。连接 context_latent 时，画面和声音都直接从上一段的 latent 切出，省去每次衔接解码再编码造成的轻微画质损失。输入条件中的 last_frame 锚点会保留，并与开头一起固定。",
+    "inputs": {
+      "context_length": {
+        "tooltip": "从上一段延续的画面帧数。只有这些长度正好是整数个 latent 步，所以只提供这些选项。5 勉强流畅，22 几乎无缝。窗口越长固定的运动越多，但会占用输出片段开头，56 帧会把 2.3 秒渲染花在最终丢弃的帧上。"
+      },
+      "audio_context_length": {
+        "tooltip": "固定的尾部音频帧数，与画面窗口相互独立；0 表示跟随画面窗口。窗口与固定的视频帧末端对齐，所以这里只控制声音向前延伸多远。3 的倍数正好落在 40 Hz 音频网格上，24 的倍数是整秒：24 表示固定最后一秒。不在网格上的值会扩展到最近的整步。"
+      },
+      "context_frames": {
+        "tooltip": "上一段的解码帧，未连接 context_latent 时使用。连接了 context_latent 时画面改从它读取，此输入被忽略。"
+      },
+      "context_latent": {
+        "tooltip": "上一段的采样器输出 latent（即接到解码节点的那个）。同时提供画面和声音，直接切取，省去链式衔接中每次解码再编码造成的轻微画质损失。分辨率必须与当前生成的片段相同。"
+      },
+      "audio_vae": {
+        "tooltip": "H3 音频 VAE。与 context_audio 一起提供，把上一段的尾音带过衔接点。连接 context_latent 时不需要。"
+      },
+      "context_audio": {
+        "tooltip": "上一段的音频。与固定帧对应的尾部会被编码并一起固定。连接 context_latent 时忽略。"
+      }
+    }
+  },
+  "MiniMaxH3MotionContextTrim": {
+    "description": "去掉解码后 H3 片段开头的固定帧，画面和声音按相同时长裁剪。",
+    "inputs": {
+      "audio": {
+        "tooltip": "同一片段的解码音频，按对应时长裁剪，保持音画同步。无声片段可不连接。"
+      },
+      "fps": {
+        "tooltip": "用于把裁剪帧数换算成音频时长的帧率，必须与 Create Video 使用的一致。"
+      },
+      "match_tail": {
+        "tooltip": "让音频时长正好等于 帧数/fps：过长的尾部会被裁掉，过短的用静音补齐。H3 会把音频网格取整到最近一步，每段大约多或少 8ms 声音，链式衔接时会逐段累积。"
+      }
+    }
+  },
+  "MiniMaxH3MotionContextSaveLatent": {
+    "description": "保存采样器输出的音视频 latent，供下一次运行时通过对应的 Load 节点给 Motion Context 固定音频。",
+    "inputs": {
+      "latent": {
+        "tooltip": "采样器输出的 latent（即接到解码节点的那个）。"
+      },
+      "filename_prefix": {
+        "tooltip": "保存在 ComfyUI output 目录下。默认把整条链的 latent 放在同一文件夹，Load 节点总能选到最新的。"
+      },
+      "clip_index": {
+        "tooltip": "当前是链中的第几段。保存到该段的固定位置，重新生成会覆盖被弃用的结果而不是堆积新文件。第 1 段：这里填 1，Load 节点填 0；第 2 段：这里填 2，Load 节点填 1。0 为旧行为，每次运行生成新的编号文件（编号按运行次数而非片段）。"
+      }
+    }
+  },
+  "MiniMaxH3MotionContextLoadLatent": {
+    "description": "加载 H3 Motion Context Save Latent 保存的 latent，仅用于 context_latent 输入。",
+    "inputs": {
+      "latent_path": {
+        "tooltip": "已保存的 latent 文件或文件夹（相对路径基于 ComfyUI output 目录）。指定具体文件时，只要 clip_index 大于 0 就总是加载该文件并忽略编号；clip_index 为 0 时不读取文件。"
+      },
+      "clip_index": {
+        "tooltip": "要从哪一段继续：加载该段的位置。第 1 段：这里填 0，Save 节点填 1（不加载）。从第 1 段生成第 2 段：这里填 1，Save 节点填 2。"
+      }
+    }
+  },
+  "MiniMaxH3MotionContextChain": {
+    "description": "Approve 推进 Load/Save 并运行下一段。Run/Re-roll 排队当前位置（用它代替 ComfyUI 的运行）。Chain 是循环的 Approve；在 Load 0 / Save 1 且尚未保存第 1 段时，会先生成第 1 段。segments 是 Chain 停止前运行的段数（0 表示直到点击 Stop）。Reset 设为 Load 0 / Save 1。Clear latents 删除链中已编号的位置。Load、Save 和本节点必须位于同一个画布分组，否则按钮无效。",
+    "inputs": {
+      "segments": {
+        "tooltip": "Chain 停止前生成的段数。0 表示一直运行到点击 Stop。"
+      }
+    }
+  },
+  "MiniMaxH3MotionContextSeamProbe": {
+    "description": "在工作流中测量链式衔接：片段 B 是否延续片段 A 的音频，以及切点处是否有音量跳变。",
+    "inputs": {
+      "clip_b_untrimmed": {
+        "tooltip": "当前片段经 VAE 解码、尚未裁剪的音频。它仍带有固定的开头，用于比较。"
+      },
+      "trim_frames": {
+        "tooltip": "从 Motion Context 节点的 trim 输出连接，与裁剪节点使用同一个值，表示固定的跨度。"
+      },
+      "clip_a_latent": {
+        "tooltip": "上一段的音视频 latent，即接到 Motion Context 的 context_latent 的那个。节点会自行解码并对齐尾部。不连接时只描述片段 B，不做测量。"
+      },
+      "audio_vae": {
+        "tooltip": "H3 音频 VAE，用于从片段 A 的 latent 中解码音频。"
+      },
+      "fps": {
+        "tooltip": "必须与 Create Video 使用的一致。"
+      },
+      "window_ms": {
+        "tooltip": "相关性分析窗口。"
+      },
+      "search_ms": {
+        "tooltip": "向两侧搜索的最大偏移。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "原样输出 clip_b_untrimmed，继续接到裁剪节点。"
+      },
+      "1": {
+        "tooltip": "测量报告，可接 Preview Text 节点。"
+      }
+    }
+  },
+  "MiniMaxH3LongVideo": {
+    "description": "生成多段 H3 短片，延续其运动和音频，输出为一个视频。将 VIDEO 接到 Save Video。需要 ComfyUI 原生的 Concatenate Video 支持。无参考图时使用 FL2VA/T2VA 模型，有参考图时使用 Ref2VA 模型。",
+    "inputs": {
+      "prompt": {
+        "tooltip": "为整个视频写一份完整的 H3 提示词，需要时使用最终视频的时间戳。连接 prompt_api 会自动适配到各采样段；不连接则每段重复使用同一提示词。"
+      },
+      "total_seconds": {
+        "tooltip": "24 fps 下的最终时长。段数根据 segment_seconds 和 context_length 自动计算。"
+      },
+      "segment_seconds": {
+        "tooltip": "每段采样的目标时长，包含重叠部分。显存允许时用 15 秒；段越短，编码、解码和衔接开销越多。Prompt API 可能为保持定时对白完整而重新分配或加长片段。最后一段可能延长约一秒，并按 H3 帧网格向上取整。"
+      },
+      "tiled_decode": {
+        "tooltip": "使用自带的分块视频 VAE 解码器以降低解码显存。"
+      },
+      "first_frame": {
+        "tooltip": "可选的开场图片，仅用于第一段。"
+      },
+      "reference_images": {
+        "tooltip": "供 Ref2VA 模型使用的可选图片批次。每张图都是参考图：<Picture 1>、<Picture 2> 等。用 Image Batch 组合多张图片。参考图在整条链中始终生效。"
+      },
+      "prompt_api": {
+        "tooltip": "连接 H3 Prompt API 以自动生成各段提示词。不连接则直接复用原提示词，不调用 API。只有一段的视频也会跳过 API。"
+      },
+      "log_prompts": {
+        "tooltip": "采样前把输入提示词、各段最终提示词、种子和任务 ID 保存到 output/h3_prompt_logs，包括 Prompt Builder 命中缓存时。AI 规划日志由 Prompt API 的 log_prompts 单独控制。"
+      }
+    }
+  },
+  "MiniMaxH3PromptAPI": {
+    "description": "配置 Chat Completions API。H3 Long Video 先检查定时对白边界，再请求以 JSON 返回的简洁分段提示词。无需工具调用。本配置节点自身不调用 API。",
+    "inputs": {
+      "api_url": {
+        "tooltip": "API 基础地址（需要时包含 /v1），或完整的 /chat/completions 地址。Ollama 填 http://127.0.0.1:11434/v1。"
+      },
+      "model": {
+        "tooltip": "API 提供的模型 ID，例如 DeepSeek 模型或本地 API 服务加载的模型。"
+      },
+      "api_key": {
+        "tooltip": "API 密钥，不带 Bearer。本地无鉴权服务可留空。该值可能保存在工作流、历史记录和输出元数据中，分享前请删除。"
+      },
+      "json_mode": {
+        "tooltip": "请求 response_format=json_object。API 不支持 JSON 模式时请关闭，仍会要求模型输出 JSON。"
+      },
+      "max_tokens": {
+        "tooltip": "包含模型的思考 token。本地服务拒绝请求时调小。"
+      },
+      "variation": {
+        "tooltip": "修改后，下次运行视频时会请求另一种提示词改写。"
+      },
+      "log_prompts": {
+        "tooltip": "采样前将可读的原始/最终提示词保存到 output/h3_prompt_logs；详细回复和用量在同名 JSON 中。不包含密钥、请求头和推理内容。"
+      }
+    }
+  },
+  "MiniMaxH3PromptBuilder": {
+    "description": "Ref2VA 六段提示词与图片编辑器。直接填写即可使用；连接 H3 Prompt API 后可点击 AI 整理。",
+    "inputs": {
+      "subject_definitions": { "tooltip": "主体定义" },
+      "summary": { "tooltip": "内容概述" },
+      "retention_analysis": { "tooltip": "参考保留规则" },
+      "detailed_description": { "tooltip": "画面与动作时间线" },
+      "overall_soundscape": { "tooltip": "整体环境声" },
+      "non_diegetic_music": { "tooltip": "背景音乐" },
+      "ai_read_images": {
+        "tooltip": "AI 读取压缩后的参考图。需要视觉模型；关闭后仅处理文字。"
+      },
+      "log_prompts": {
+        "tooltip": "保存原文、最终提示词和 AI 输入/回复到 output/h3_prompt_logs。连接的 Prompt API 也需开启 log_prompts。"
+      },
+      "ai_language": {
+        "tooltip": "AI 整理输出的描述语言。English 符合 H3 官方 Ref2VA 格式；台词始终保留原语言。"
+      }
+    }
+  },
+  "MiniMaxH3PromptBackup": {
+    "description": "编辑并输出图片和提示词。backup 保存到 output/h3_prompt_backups；load 预览并载入备份。"
+  }
+}

@@ -134,7 +134,7 @@ def test_prompt_api():
     assert not {"story", "prompt", "total_seconds", "segment_count", "input_mode"} & fields.keys()
     assert fields["api_key"][1]["default"] == ""
     assert fields["log_prompts"][1]["default"] is True
-    assert fields["max_tokens"][1]["default"] == 16384
+    assert fields["max_tokens"][1]["default"] == 65535
     for base, endpoint in [
         ("https://api.deepseek.com", "https://api.deepseek.com/chat/completions"),
         ("http://127.0.0.1:11434/v1/", "http://127.0.0.1:11434/v1/chat/completions"),
@@ -147,7 +147,7 @@ def test_prompt_api():
     assert schedule[1]["pinned_global_interval"] == [8 - 22 / 24, 8]
     full_prompt = "From 0-3s the man says <d>[Chinese] 你好！</d>. From 11-14s they toast."
     speech = [{"text": "<d>[Chinese] 你好！</d>", "start_seconds": 0, "end_seconds": 3}]
-    timeline = {"has_explicit_times": True, "speech": speech}
+    timeline = {"speech": speech}
     expected = ["From 0 to 3 seconds, the man says <d>[Chinese] 你好！</d>.", "From 3.92 to 6.92 seconds, they toast."]
 
     def response(content, status=200, finish="stop"):
@@ -206,6 +206,9 @@ def test_prompt_api():
         assert post.call_args.kwargs["headers"] == {} and post.call_args.kwargs["timeout"] == (10, 60)
         assert "response_format" not in post.call_args.kwargs["json"]
         assert "thinking" not in post.call_args.kwargs["json"]
+        post.side_effect = [response(timeline), response({"prompts": [expected[0].replace("the man", "<Subject 1>（S1）"), expected[1]]})]
+        prompts = planner.split_prompts(full_prompt, schedule, "Ref2VA", 3, **settings)[1]
+        assert prompts[0].startswith("From 0 to 3 seconds, <Subject 1>(S1) says") and "（" not in prompts[0]
 
         invalid = [
             'invalid', {"prompts": ["one"]}, {"prompts": [expected[0], ""]},
@@ -231,14 +234,16 @@ def test_prompt_api():
         assert any(r["finish_reason"] == "length" and r["status"] == "invalid_response" for r in reports)
 
         post.reset_mock()
-        post.side_effect = [response({"has_explicit_times": False, "speech": []})]
-        assert planner.split_prompts("Quiet conversation.", schedule, "T2VA", 0, **settings) == (schedule, ["Quiet conversation."] * 2)
-        assert post.call_count == 1
+        untimed = ["They fly over the clouds.", "They keep flying above the clouds."]
+        post.side_effect = [response({"speech": []}), response({"prompts": untimed})]
+        assert planner.split_prompts("They fly over the clouds.", schedule, "T2VA", 0, **settings) == (schedule, untimed)
+        assert post.call_count == 2
+        assert all(not clip["speech"] for clip in json.loads(post.call_args.kwargs["json"]["messages"][1]["content"])["clips"])
         for bad in [
-            {"has_explicit_times": True, "speech": [dict(speech[0], text="An invented line.")]},
-            {"has_explicit_times": True, "speech": [dict(speech[0], end_seconds=-1)]},
-            {"has_explicit_times": True, "speech": [dict(speech[0], start_seconds=float("nan"))]},
-            {"has_explicit_times": False, "speech": speech},
+            {"speech": [dict(speech[0], text="An invented line.")]},
+            {"speech": [dict(speech[0], end_seconds=-1)]},
+            {"speech": [dict(speech[0], start_seconds=float("nan"))]},
+            {"speech": "none"},
         ]:
             post.side_effect = [response(bad)]
             try:
@@ -253,7 +258,7 @@ def test_prompt_api():
         assert set(log_directory.iterdir()) == files_before
         continuous = 'From 0-14s the speaker says <d>[Chinese] 你好！</d>.'
         post.reset_mock()
-        post.side_effect = [response({"has_explicit_times": True, "speech": [dict(speech[0], end_seconds=14)]})]
+        post.side_effect = [response({"speech": [dict(speech[0], end_seconds=14)]})]
         final_schedule, final_prompts = planner.split_prompts(
             continuous, planner.segment_schedule(long.plan_segments(14, 5, 22)), 'Ref2VA', 3, **settings)
         assert len(final_schedule) == 1 and final_prompts == [continuous] and post.call_count == 1

@@ -694,7 +694,7 @@
       ],
       "properties": {
         "Node name for S&R": "MiniMaxH3PromptBuilder",
-        "h3_import_text": "subject_definitions:\n<Subject 1> 是 <Picture 1> 中穿黑色衬衣的男子。\n<Subject 2> 是 <Picture 2> 中穿白色针织衫的女孩。\n<Subject 3> 是 <Picture 3> 中的餐厅环境。\n\nsummary:\n[keyframe completion + reference generation]\n一个10秒的视频：<Subject 1> 与 <Subject 2> 在 <Subject 3> 的餐厅内交谈，女子突然想起忘记关门，露出惊讶的表情并站起。\n\nretention_analysis:\n<Subject 1>：fully_preserved，保持男子的面部、发型和服装。\n<Subject 2>：fully_preserved，保持女子的面部、发型和白色针织衫。\n<Subject 3>：fully_preserved，保持餐厅灯光、家具和桌椅布局。\n\nShot 1 从所接首帧的构图开始。\n\ndetailed_description:\n写实电影风格，柔和室内光线。\n[Shot 1] 在 Shot 1 的 0–6 秒内，镜头缓慢、小幅向前推进，保持两位人物及各自的水杯可见。该镜头内部不切镜。\n0–3 秒：<Subject 1> (S1)抬眼看向女子，微笑着热情地说：<d>[Chinese] 你好！</d>，女子看着他，自然地眨着眼睛，嘴唇紧闭，静静地听着。\n3–6 秒：<Subject 2> (S2)看着男子，说<d>[Chinese] 见到你很高兴！</d> 。\n[Shot 2] At 00:06.000, 镜头切到女子面部近景。\n6–7 秒：女子露出惊讶的表情。\n[Shot 3] At 00:07.000, 镜头切到 <Subject 2> 的全身镜头，头到脚及身后的椅子均在画面内，保持原来的摄像机轴线。\n7–9 秒：<Subject 2> (S2) 突然起身，椅子随动作向后轻移，约第 7 秒发出短促的椅脚摩擦地面声。她急切地说：<d>[Chinese] 完了，忘了关门！</d>\n9–10 秒：<Subject 2>已经站稳，保持着急的神情，短暂停顿。\n镜头继续保持，无新增对白。\n\n每句引语都由指定的说话者朗读一遍。口型自然地跟随发音。听者保持沉默。呼吸、眨眼和细微的面部表情在动作间隙持续进行。屏幕上不显示字幕或其他文字。\n\noverall_soundscape:\n安静、持续的餐厅环境声，伴有轻微的画外刀叉碰盘声。\n普通话对白清晰，环境声保持低音量。女子起身时出现同步的椅脚摩擦声。\n无旁白。\n\nnon_diegetic_music:\nNone"
+        "h3_import_text": "subject_definitions:\n<Subject 1> 是 <Picture 1> 中穿黑色衬衣的男子。\n<Subject 2> 是 <Picture 2> 中穿白色针织衫的女孩。\n<Subject 3> 是 <Picture 3> 中的餐厅环境。\n\nsummary:\n[keyframe completion + reference generation]\n一个10秒的视频：<Subject 1> 与 <Subject 2> 在 <Subject 3> 的餐厅内交谈，女子突然想起忘记关门，露出惊讶的表情并站起。\n\nretention_analysis:\n<Subject 1>：fully_preserved，保持男子的面部、发型和服装。\n<Subject 2>：fully_preserved，保持女子的面部、发型和白色针织衫。\n<Subject 3>：fully_preserved，保持餐厅灯光、家具和桌椅布局。\n\nShot 1 从所接首帧的构图开始。\n\ndetailed_description:\n写实电影风格，柔和室内光线。\n[Shot 1] 在 Shot 1 的 0–6 秒内，镜头缓慢、小幅向前推进，保持两位人物及各自的水杯可见。该镜头内部不切镜。\n0–3 秒：<Subject 1> (S1)抬眼看向女子，微笑着热情地说：<d>[Chinese] 你好！</d>，女子看着他，自然地眨着眼睛，嘴唇紧闭，静静地听着。\n3–6 秒：<Subject 2> (S2)看着男子，说<d>[Chinese] 见到你很高兴！</d> 。\n[Shot 2] At 00:06.000, 镜头切到女子面部近景。\n6–7 秒：女子露出惊讶的表情。\n[Shot 3] At 00:07.000, 镜头切到 <Subject 2> 的全身镜头，头到脚及身后的椅子均在画面内，保持原来的摄像机轴线。\n7–9 秒：<Subject 2> (S2) 突然起身，椅子随动作向后轻移，约第 7 秒发出短促的椅脚摩擦地面声。她急切地说：<d>[Chinese] 完了，忘了关门！</d>\n9–10 秒：<Subject 2>已经站稳，保持着急的神情，短暂停顿。\n镜头继续保持，无新增对白。\n\n每句引语都由指定的说话者朗读一遍。口型自然地跟随发音。听者保持沉默。呼吸、眨眼和细微的面部表情在动作间隙持续进行。屏幕上不显示字幕或其他文字。\n\noverall_soundscape:\n安静、持续的餐厅环境声，伴有轻微的画外刀叉碰盘声。\n普通话对白清晰，环境声保持低音量。女子起身时出现同步的椅脚摩擦声。\n无旁白。\n\nnon_diegetic_music:\nN/A"
       },
       "widgets_values": [
         "<Subject 1> 是 <Picture 1> 中穿黑色衬衣的男子。\n<Subject 2> 是 <Picture 2> 中穿白色针织衫的女孩。\n<Subject 3> 是 <Picture 3> 中的餐厅环境。",
@@ -702,7 +702,7 @@
         "<Subject 1>：fully_preserved，保持男子的面部、发型和服装。\n<Subject 2>：fully_preserved，保持女子的面部、发型和白色针织衫。\n<Subject 3>：fully_preserved，保持餐厅灯光、家具和桌椅布局。\n\nShot 1 从所接首帧的构图开始。",
         "写实电影风格，柔和室内光线。\n[Shot 1] 在 Shot 1 的 0–6 秒内，镜头缓慢、小幅向前推进，保持两位人物及各自的水杯可见。该镜头内部不切镜。\n0–3 秒：<Subject 1> (S1)抬眼看向女子，微笑着热情地说：<d>[Chinese] 你好！</d>，女子看着他，自然地眨着眼睛，嘴唇紧闭，静静地听着。\n3–6 秒：<Subject 2> (S2)看着男子，说<d>[Chinese] 见到你很高兴！</d> 。\n[Shot 2] At 00:06.000, 镜头切到女子面部近景。\n6–7 秒：女子露出惊讶的表情。\n[Shot 3] At 00:07.000, 镜头切到 <Subject 2> 的全身镜头，头到脚及身后的椅子均在画面内，保持原来的摄像机轴线。\n7–9 秒：<Subject 2> (S2) 突然起身，椅子随动作向后轻移，约第 7 秒发出短促的椅脚摩擦地面声。她急切地说：<d>[Chinese] 完了，忘了关门！</d>\n9–10 秒：<Subject 2>已经站稳，保持着急的神情，短暂停顿。\n镜头继续保持，无新增对白。\n\n每句引语都由指定的说话者朗读一遍。口型自然地跟随发音。听者保持沉默。呼吸、眨眼和细微的面部表情在动作间隙持续进行。屏幕上不显示字幕或其他文字。",
         "安静、持续的餐厅环境声，伴有轻微的画外刀叉碰盘声。\n普通话对白清晰，环境声保持低音量。女子起身时出现同步的椅脚摩擦声。\n无旁白。",
-        "None",
+        "N/A",
         "[\"h3_prompt_builder/exec-1e045614-0f3f-4b0a-ac55-e651d7b0913c.png [input]\",\"h3_prompt_builder/exec-69bc3253-18f3-42a3-8de6-de35d0a1da0c.png [input]\",\"h3_prompt_builder/exec-1fbaf138-d658-4515-a76f-824704a880bd.png [input]\"]",
         0,
         true,
@@ -715,7 +715,7 @@
         "retention_analysis": "<Subject 1>：fully_preserved，保持男子的面部、发型和服装。\n<Subject 2>：fully_preserved，保持女子的面部、发型和白色针织衫。\n<Subject 3>：fully_preserved，保持餐厅灯光、家具和桌椅布局。\n\nShot 1 从所接首帧的构图开始。",
         "detailed_description": "写实电影风格，柔和室内光线。\n[Shot 1] 在 Shot 1 的 0–6 秒内，镜头缓慢、小幅向前推进，保持两位人物及各自的水杯可见。该镜头内部不切镜。\n0–3 秒：<Subject 1> (S1)抬眼看向女子，微笑着热情地说：<d>[Chinese] 你好！</d>，女子看着他，自然地眨着眼睛，嘴唇紧闭，静静地听着。\n3–6 秒：<Subject 2> (S2)看着男子，说<d>[Chinese] 见到你很高兴！</d> 。\n[Shot 2] At 00:06.000, 镜头切到女子面部近景。\n6–7 秒：女子露出惊讶的表情。\n[Shot 3] At 00:07.000, 镜头切到 <Subject 2> 的全身镜头，头到脚及身后的椅子均在画面内，保持原来的摄像机轴线。\n7–9 秒：<Subject 2> (S2) 突然起身，椅子随动作向后轻移，约第 7 秒发出短促的椅脚摩擦地面声。她急切地说：<d>[Chinese] 完了，忘了关门！</d>\n9–10 秒：<Subject 2>已经站稳，保持着急的神情，短暂停顿。\n镜头继续保持，无新增对白。\n\n每句引语都由指定的说话者朗读一遍。口型自然地跟随发音。听者保持沉默。呼吸、眨眼和细微的面部表情在动作间隙持续进行。屏幕上不显示字幕或其他文字。",
         "overall_soundscape": "安静、持续的餐厅环境声，伴有轻微的画外刀叉碰盘声。\n普通话对白清晰，环境声保持低音量。女子起身时出现同步的椅脚摩擦声。\n无旁白。",
-        "non_diegetic_music": "None",
+        "non_diegetic_music": "N/A",
         "pictures": "[\"h3_prompt_builder/exec-1e045614-0f3f-4b0a-ac55-e651d7b0913c.png [input]\",\"h3_prompt_builder/exec-69bc3253-18f3-42a3-8de6-de35d0a1da0c.png [input]\",\"h3_prompt_builder/exec-1fbaf138-d658-4515-a76f-824704a880bd.png [input]\"]",
         "ai_request": 0,
         "ai_read_images": true,

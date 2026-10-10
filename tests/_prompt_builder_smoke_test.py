@@ -27,7 +27,7 @@ def main():
     fields = dict.fromkeys(builder.FIELDS, "")
     fields.update(subject_definitions="<Subject 1> 来自 <Picture 1>。",
                   detailed_description="[Shot 1] 0–3 秒：走近。\n[Shot 2] At 00:03.000, 转为近景。",
-                  non_diegetic_music="None")
+                  non_diegetic_music="N/A")
     with patch.object(builder, "rewrite_fields", side_effect=AssertionError("manual mode called LLM")), CurrentNodeContext("builder-smoke", "42"):
         result = builder.MiniMaxH3PromptBuilder.execute(**fields, prompt_api={"model": "test"})
     assert result[0] == builder.assemble_prompt(fields) and result[1] is None
@@ -89,11 +89,13 @@ def main():
             assert saved["requests"][0]["messages"][1]["content"][-1] == parts[-1]
             assert saved["requests"][0]["messages"][1]["content"][1] == {"type": "image_url", "omitted": True}
             readable = log_path.with_suffix(".txt").read_text(encoding="utf-8")
-            assert builder.SYSTEM_PROMPT in readable and builder.assemble_prompt(fields) in readable
+            assert builder.SYSTEM_PROMPTS["English"] in readable and builder.assemble_prompt(fields) in readable
             assert "data:image" not in readable
         with patch.object(builder, "rewrite_fields", return_value=fields) as rewrite:
             builder.MiniMaxH3PromptBuilder.execute(**fields, pictures=pictures, ai_request=1, prompt_api=config, ai_read_images=False)
-            assert rewrite.call_args.args[3] == ()
+            assert rewrite.call_args.args[3] == () and rewrite.call_args.kwargs["language"] == "English"
+            builder.MiniMaxH3PromptBuilder.execute(**fields, ai_request=1, prompt_api=config, ai_language="中文")
+            assert rewrite.call_args.kwargs["language"] == "中文"
         try:
             builder.picture_paths('["../outside.png"]')
         except ValueError:
@@ -106,8 +108,13 @@ def main():
         assert builder.rewrite_fields(fields, 2, config) == fields
         payload = request.call_args.args[1]
         assert json.loads(payload["messages"][1]["content"])["pictures"] == ["<Picture 1>", "<Picture 2>"]
-    malformed = {**fields, "detailed_description": "[Shot 1]\n0–3 秒：走近。\n[Shot 2] At 00:03.000\n3–6 秒：转为近景。\n[Shot 3] At 00:06.000，继续。"}
-    normalized = {**malformed, "detailed_description": malformed["detailed_description"].replace("00:03.000\n", "00:03.000,\n").replace("00:06.000，", "00:06.000,")}
+        assert payload["messages"][0]["content"] == builder.SYSTEM_PROMPTS["English"]
+        builder.rewrite_fields(fields, 2, config, language="中文")
+        assert request.call_args.args[1]["messages"][0]["content"] == builder.SYSTEM_PROMPTS["中文"]
+    assert all("{" not in prompt for prompt in builder.SYSTEM_PROMPTS.values())
+    assert "(appears in [Shot N])" in builder.SYSTEM_PROMPTS["English"] and "（出现于 [Shot N]）" in builder.SYSTEM_PROMPTS["中文"]
+    malformed = {**fields, "detailed_description": "[Shot 1]\n0–3 秒：走近。\n[Shot 2] At 00:03.000\n3–6 秒：转为近景。\n[Shot 3] At 00:06.000，<Subject 1>（S1）说：<d>[Chinese] 好。</d>"}
+    normalized = {**malformed, "detailed_description": malformed["detailed_description"].replace("00:03.000\n", "00:03.000,\n").replace("00:06.000，", "00:06.000,").replace("（S1）", "(S1)")}
     response = {"choices": [{"message": {"content": json.dumps(malformed)}, "finish_reason": "stop"}]}
     with patch.object(builder, "request_chat", return_value=response):
         assert builder.rewrite_fields(fields, 2, config) == normalized
@@ -119,6 +126,15 @@ def main():
             pass
         else:
             raise AssertionError("incomplete AI fields accepted")
+    spoken = {**fields, "detailed_description": "0–3 秒：<Subject 1> (S1) 说：<d>[Chinese] 你好！</d>"}
+    changed = {**spoken, "detailed_description": spoken["detailed_description"].replace("你好", "您好")}
+    with patch.object(builder, "request_chat", return_value={"choices": [{"message": {"content": json.dumps(changed)}, "finish_reason": "stop"}]}):
+        try:
+            builder.rewrite_fields(spoken, 0, config)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("changed AI dialogue accepted")
     with patch.object(builder, "request_chat", side_effect=RuntimeError("API unavailable")):
         try:
             builder.rewrite_fields(fields, 0, {**config, "log_prompts": True})
@@ -128,9 +144,9 @@ def main():
             raise AssertionError("API failure must propagate")
     reports = [json.loads(p.read_text(encoding="utf-8")) for p in manual_path.parent.glob("*.json")]
     failure, = [r for r in reports if r["status"] == "failed"]
-    assert failure["requests"][0]["messages"][0]["content"] == builder.SYSTEM_PROMPT
+    assert failure["requests"][0]["messages"][0]["content"] == builder.SYSTEM_PROMPTS["English"]
     assert failure["error"] == "RuntimeError: API unavailable" and failure["final_prompt"] is None
-    print("PASS: manual text, image batch/order, file cache, path containment, compressed vision payload, EXIF/size/original preservation, safe logs, vision opt-out, API contract, invalid AI response")
+    print("PASS: manual text, image batch/order, file cache, path containment, compressed vision payload, EXIF/size/original preservation, safe logs, vision opt-out, output language, API contract, invalid AI response")
 
 
 if __name__ == "__main__":

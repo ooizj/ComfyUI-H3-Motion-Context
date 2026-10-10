@@ -1,5 +1,6 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { localizer, t } from "./h3_i18n.js";
 
 const css = document.createElement("style");
 css.textContent = `
@@ -52,6 +53,8 @@ function install(node) {
   }
   let busy = false;
   let replacing = null;
+  let directory = "output/h3_prompt_backups";
+  const i18n = localizer(() => { renderGallery(); showLocation(); });
   const pictures = () => JSON.parse(widgets.pictures.value || "[]");
   const changed = () => { node.graph?.change(); node.setDirtyCanvas(true); };
   const button = (label, action, parent) => {
@@ -66,14 +69,14 @@ function install(node) {
   picker.type = "file";
   picker.accept = "image/*";
   picker.hidden = true;
-  const add = button("＋ 添加图片", () => { replacing = null; picker.multiple = true; picker.click(); }, toolbar);
+  const add = i18n.set(button("", () => { replacing = null; picker.multiple = true; picker.click(); }, toolbar), "＋ 添加图片", "＋ Add images");
   const count = element("span");
   toolbar.append(count, picker);
   const gallery = element("div", "h3-backup-gallery");
-  const label = element("label", "", "提示词");
+  const label = i18n.set(element("label"), "提示词", "Prompt");
   const prompt = element("textarea");
-  prompt.placeholder = "输入或粘贴提示词…";
-  prompt.setAttribute("aria-label", "提示词");
+  i18n.set(prompt, "输入或粘贴提示词…", "Type or paste a prompt…", "placeholder");
+  i18n.set(prompt, "提示词", "Prompt", "ariaLabel");
   prompt.spellcheck = false;
   prompt.oninput = () => { widgets.prompt.value = prompt.value; changed(); };
   const footer = element("div", "h3-backup-row");
@@ -81,7 +84,8 @@ function install(node) {
   backup.className = "h3-backup-primary";
   const load = button("load", () => void browseBackups(), footer);
   let backupDialog = null;
-  const location = element("div", "h3-backup-path", "备份目录：output/h3_prompt_backups");
+  const location = element("div", "h3-backup-path");
+  const showLocation = () => { location.textContent = t("备份目录：", "Backup folder: ") + directory; };
   const status = element("div", "h3-backup-status");
   status.setAttribute("role", "status");
   root.append(toolbar, gallery, label, prompt, footer, location, status);
@@ -89,13 +93,13 @@ function install(node) {
   function renderGallery() {
     gallery.replaceChildren();
     const paths = pictures();
-    count.textContent = `${paths.length} 张`;
+    count.textContent = t(`${paths.length} 张`, `${paths.length} images`);
     paths.forEach((path, index) => {
       const card = element("div", "h3-backup-card");
       const img = element("img");
       img.src = viewUrl(path);
       img.alt = `<Picture ${index + 1}>`;
-      img.title = `${path}\n点击插入图片引用`;
+      img.title = `${path}\n${t("点击插入图片引用", "Click to insert image label")}`;
       img.draggable = false;
       img.onclick = () => {
         if (busy) return;
@@ -106,14 +110,14 @@ function install(node) {
       const actions = element("div", "h3-backup-row");
       card.append(img, element("strong", "", img.alt), actions);
       const left = button("←", () => move(index, index - 1), actions);
-      left.title = "向前移动"; left.disabled = busy || index === 0;
+      left.title = t("向前移动", "Move earlier"); left.disabled = busy || index === 0;
       const right = button("→", () => move(index, index + 1), actions);
-      right.title = "向后移动"; right.disabled = busy || index === paths.length - 1;
-      button("换", () => { replacing = index; picker.multiple = false; picker.click(); }, actions).disabled = busy;
+      right.title = t("向后移动", "Move later"); right.disabled = busy || index === paths.length - 1;
+      button(t("换", "Swap"), () => { replacing = index; picker.multiple = false; picker.click(); }, actions).disabled = busy;
       button("×", () => reorder(paths.map((_, i) => i).filter(i => i !== index)), actions).disabled = busy;
       gallery.append(card);
     });
-    if (!paths.length) gallery.append(element("div", "h3-backup-empty", "添加、拖入或粘贴图片"));
+    if (!paths.length) gallery.append(element("div", "h3-backup-empty", t("添加、拖入或粘贴图片", "Add, drop or paste images")));
     add.disabled = backup.disabled = load.disabled = prompt.readOnly = busy;
   }
 
@@ -124,7 +128,7 @@ function install(node) {
       const old = Number(number) - 1;
       if (old < 0 || old >= paths.length) return label;
       const next = order.indexOf(old);
-      return next < 0 ? "<Picture 已删除>" : `<Picture ${next + 1}>`;
+      return next < 0 ? t("<Picture 已删除>", "<Picture deleted>") : `<Picture ${next + 1}>`;
     });
     widgets.prompt.value = prompt.value;
     widgets.pictures.value = JSON.stringify(order.map(index => paths[index]));
@@ -142,13 +146,13 @@ function install(node) {
     const images = [...files].filter(file => file.type.startsWith("image/"));
     if (!images.length) return;
     busy = true; renderGallery();
-    status.textContent = "正在添加图片…";
+    status.textContent = t("正在添加图片…", "Adding images…");
     try {
       for (const file of images) {
         const form = new FormData();
         form.append("image", file); form.append("type", "input"); form.append("subfolder", "h3_prompt_backup");
         const response = await api.fetchApi("/upload/image", { method: "POST", body: form });
-        if (!response.ok) throw new Error(`图片上传失败：HTTP ${response.status}`);
+        if (!response.ok) throw new Error(t(`图片上传失败：HTTP ${response.status}`, `Image upload failed: HTTP ${response.status}`));
         const result = await response.json();
         const path = `${result.subfolder ? result.subfolder + "/" : ""}${result.name} [${result.type || "input"}]`;
         const paths = pictures();
@@ -170,17 +174,17 @@ function install(node) {
   async function save() {
     if (busy) return;
     busy = true; renderGallery();
-    status.textContent = "正在备份…";
+    status.textContent = t("正在备份…", "Backing up…");
     try {
       const response = await api.fetchApi("/h3_motion_context/prompt_backup", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt.value, pictures: pictures() }),
       });
-      if (response.status === 404) throw new Error("请重启 ComfyUI 并刷新页面，以加载备份功能。");
+      if (response.status === 404) throw new Error(t("请重启 ComfyUI 并刷新页面，以加载备份功能。", "Restart ComfyUI and reload the page to enable backups."));
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || `备份失败：HTTP ${response.status}`);
-      location.textContent = `备份目录：${result.directory}`;
-      status.textContent = `已备份 ${result.image_count} 张图片和提示词\n${result.backup_path}`;
+      if (!response.ok) throw new Error(t("备份失败：", "Backup failed: ") + (result.error || `HTTP ${response.status}`));
+      directory = result.directory; showLocation();
+      status.textContent = t(`已备份 ${result.image_count} 张图片和提示词`, `Backed up ${result.image_count} images and the prompt`) + `\n${result.backup_path}`;
       node.properties.h3_backup_path = result.backup_path;
       changed();
     } catch (error) { status.textContent = error.message; }
@@ -192,37 +196,37 @@ function install(node) {
     busy = true; renderGallery();
     const dialog = element("dialog", "h3-backup-dialog");
     backupDialog = dialog;
-    dialog.setAttribute("aria-label", "预览并载入备份");
+    dialog.setAttribute("aria-label", t("预览并载入备份", "Preview and load a backup"));
     const browser = element("div", "h3-backup-browser");
     const body = element("div", "h3-backup-browser-body");
-    const list = element("div", "h3-backup-list", "正在读取备份…");
+    const list = element("div", "h3-backup-list", t("正在读取备份…", "Reading backups…"));
     const preview = element("div", "h3-backup-preview");
-    const detail = element("div", "h3-backup-path", "选择左侧备份以预览");
+    const detail = element("div", "h3-backup-path", t("选择左侧备份以预览", "Select a backup to preview"));
     const images = element("div", "h3-backup-preview-images");
     const text = element("textarea");
     text.readOnly = true;
-    text.setAttribute("aria-label", "备份提示词预览");
-    text.placeholder = "提示词预览";
+    text.setAttribute("aria-label", t("备份提示词预览", "Backup prompt preview"));
+    text.placeholder = t("提示词预览", "Prompt preview");
     preview.append(detail, images, text);
     body.append(list, preview);
     const actions = element("div", "h3-backup-browser-footer");
-    actions.append(element("small", "", "载入将替换当前节点中的图片和提示词。"));
+    actions.append(element("small", "", t("载入将替换当前节点中的图片和提示词。", "Loading replaces this node's images and prompt.")));
     let selected = null;
     let previewController = null;
     const listController = new AbortController();
-    const apply = button("载入所选备份", () => {
+    const apply = button(t("载入所选备份", "Load selected backup"), () => {
       if (!selected) return;
       widgets.pictures.value = JSON.stringify(selected.pictures);
       widgets.prompt.value = prompt.value = selected.prompt;
       node.properties.h3_backup_path = selected.backup_path;
-      status.textContent = `已载入 ${selected.pictures.length} 张图片和提示词\n${selected.backup_path}`;
+      status.textContent = t(`已载入 ${selected.pictures.length} 张图片和提示词`, `Loaded ${selected.pictures.length} images and the prompt`) + `\n${selected.backup_path}`;
       changed();
       dialog.close();
     }, actions);
     apply.className = "h3-backup-primary";
     apply.disabled = true;
-    button("取消", () => dialog.close(), actions);
-    browser.append(element("h3", "", "加载备份"), body, actions);
+    button(t("取消", "Cancel"), () => dialog.close(), actions);
+    browser.append(element("h3", "", t("加载备份", "Load backup")), body, actions);
     dialog.append(browser);
     for (const type of ["pointerdown", "pointermove", "pointerup", "mousedown", "dblclick", "keydown", "keyup", "wheel"]) {
       dialog.addEventListener(type, e => e.stopPropagation());
@@ -241,7 +245,7 @@ function install(node) {
       previewController = controller;
       selected = null; apply.disabled = true;
       for (const item of list.children) item.setAttribute("aria-pressed", String(item === control));
-      detail.textContent = "正在读取预览…";
+      detail.textContent = t("正在读取预览…", "Reading preview…");
       images.replaceChildren(); text.value = "";
       try {
         const response = await api.fetchApi(`/h3_motion_context/prompt_backups/${encodeURIComponent(entry.id)}`, {
@@ -249,8 +253,8 @@ function install(node) {
         });
         const result = await response.json();
         if (controller.signal.aborted || !dialog.open) return;
-        if (!response.ok) throw new Error(result.error || `读取失败：HTTP ${response.status}`);
-        detail.textContent = `${result.pictures.length} 张图片\n${result.backup_path}`;
+        if (!response.ok) throw new Error(t("读取备份失败：", "Could not read backup: ") + (result.error || `HTTP ${response.status}`));
+        detail.textContent = t(`${result.pictures.length} 张图片`, `${result.pictures.length} images`) + `\n${result.backup_path}`;
         text.value = result.prompt;
         for (const [index, path] of result.pictures.entries()) {
           const figure = element("figure");
@@ -259,7 +263,7 @@ function install(node) {
           figure.append(img, element("figcaption", "", img.alt));
           images.append(figure);
         }
-        if (!result.pictures.length) images.append(element("div", "h3-backup-empty", "此备份仅包含提示词"));
+        if (!result.pictures.length) images.append(element("div", "h3-backup-empty", t("此备份仅包含提示词", "This backup has only a prompt")));
         selected = result; apply.disabled = false;
       } catch (error) {
         if (!controller.signal.aborted && dialog.open) detail.textContent = error.message;
@@ -270,10 +274,10 @@ function install(node) {
       const response = await api.fetchApi("/h3_motion_context/prompt_backups", {
         signal: listController.signal, cache: "no-store",
       });
-      if (response.status === 404) throw new Error("请重启 ComfyUI 并刷新页面，以加载备份列表。");
+      if (response.status === 404) throw new Error(t("请重启 ComfyUI 并刷新页面，以加载备份列表。", "Restart ComfyUI and reload the page to list backups."));
       const result = await response.json();
       if (listController.signal.aborted || !dialog.open) return;
-      if (!response.ok) throw new Error(result.error || `读取失败：HTTP ${response.status}`);
+      if (!response.ok) throw new Error(t("读取备份列表失败：", "Could not list backups: ") + (result.error || `HTTP ${response.status}`));
       list.replaceChildren();
       let first = null;
       for (const entry of result.backups) {
@@ -283,21 +287,21 @@ function install(node) {
         control.title = entry.id;
         if (entry.cover) {
           const cover = element("img");
-          cover.src = viewUrl(entry.cover); cover.alt = "备份缩略图"; cover.loading = "lazy";
+          cover.src = viewUrl(entry.cover); cover.alt = t("备份缩略图", "Backup thumbnail"); cover.loading = "lazy";
           control.append(cover);
         }
         const time = new Date(entry.created_at);
         control.append(element("strong", "", Number.isNaN(time.getTime()) ? entry.id : time.toLocaleString()));
         if (entry.error) {
-          control.append(element("small", "", entry.error)); control.disabled = true;
+          control.append(element("small", "", t("无法读取：", "Unreadable: ") + entry.error)); control.disabled = true;
         } else {
-          control.append(element("small", "", `${entry.image_count} 张图片`),
-            element("div", "h3-backup-snippet", entry.prompt_preview || "（空提示词）"));
+          control.append(element("small", "", t(`${entry.image_count} 张图片`, `${entry.image_count} images`)),
+            element("div", "h3-backup-snippet", entry.prompt_preview || t("（空提示词）", "(empty prompt)")));
           first ??= { entry, control };
         }
       }
       if (first) void previewEntry(first.entry, first.control);
-      else detail.textContent = result.backups.length ? "没有可载入的备份，请检查列表中的错误。" : "暂无备份，先点击 backup 保存。";
+      else detail.textContent = result.backups.length ? t("没有可载入的备份，请检查列表中的错误。", "No loadable backups; check the errors in the list.") : t("暂无备份，先点击 backup 保存。", "No backups yet; click backup to save one.");
     } catch (error) {
       if (!listController.signal.aborted && dialog.open) list.textContent = error.message;
     }
@@ -306,6 +310,7 @@ function install(node) {
   const oldRemoved = node.onRemoved;
   node.onRemoved = function (...args) {
     backupDialog?.close();
+    i18n.dispose();
     oldRemoved?.apply(this, args);
   };
 
@@ -315,8 +320,8 @@ function install(node) {
   function restore() {
     if (node.title === "H3 Image & Prompt Backup") node.title = "H3 Image & Prompt";
     prompt.value = widgets.prompt.value ?? "";
-    status.textContent = node.properties.h3_backup_path ? `上次备份：${node.properties.h3_backup_path}` : "";
-    renderGallery(); syncWidth();
+    status.textContent = node.properties.h3_backup_path ? t("上次备份：", "Last backup: ") + node.properties.h3_backup_path : "";
+    renderGallery(); showLocation(); syncWidth();
   }
   const oldConfigure = node.onConfigure;
   node.onConfigure = function (...args) { oldConfigure?.apply(this, args); restore(); };
@@ -332,8 +337,8 @@ function install(node) {
       const response = await api.fetchApi("/h3_motion_context/prompt_backup");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
-      location.textContent = `备份目录：${result.directory}`;
-    } catch { status.textContent = "无法读取备份目录，请重启 ComfyUI 并刷新页面。"; }
+      directory = result.directory; showLocation();
+    } catch { status.textContent = t("无法读取备份目录，请重启 ComfyUI 并刷新页面。", "Could not read the backup folder; restart ComfyUI and reload the page."); }
   })();
 }
 

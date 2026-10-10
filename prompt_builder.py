@@ -19,14 +19,15 @@ from comfy_api.latest import io
 
 from .prompt_log import new_prompt_log_path, prompt_request_log, prompt_trace_text, write_prompt_log
 from .prompt_planner import chat_endpoint, read_json_message, request_chat
+from .prompt_timing import FULL_WIDTH_SPEAKER, dialogue_lines
 
 FIELDS = (
     "subject_definitions", "summary", "retention_analysis", "detailed_description",
     "overall_soundscape", "non_diegetic_music",
 )
-LABELS = ("主体定义", "内容概述", "参考保留规则", "画面与动作时间线", "整体环境声", "背景音乐")
+LABELS = ("Subject definitions", "Summary", "Retention analysis", "Shots and timed actions", "Overall soundscape", "Background music")
 _LOG = logging.getLogger("h3_motion_context")
-SYSTEM_PROMPT = """你是 MiniMax H3 Ref2VA 提示词编辑。忠实保留用户要求，结合参考图片写出六段可执行提示词。
+_PROMPT = """你是 MiniMax H3 Ref2VA 提示词编辑。忠实保留用户要求，结合参考图片写出六段可执行提示词。
 输入的 fields 可能已有六段内容，也可能只有 detailed_description 放着整篇普通描述。
 先在内部确认原文的事件顺序、每段起止时间、说话者与台词、情绪、指定镜头，
 并区分贯穿场景的环境底声与只在某个动作或地点出现的声音，再写正文。
@@ -37,9 +38,9 @@ SYSTEM_PROMPT = """你是 MiniMax H3 Ref2VA 提示词编辑。忠实保留用户
 retention_analysis、detailed_description、overall_soundscape、non_diegetic_music。
 不要输出 Markdown 代码块、解释或工具调用，字段值内不要重复六段标题。
 
-保持原文语言：中文输入的六个字段均使用中文描述，英文输入使用英文；不要翻译台词，
-不要附加台词译文。保留用户明确指定的人物、服装、动作、景别、运镜、情绪和时间。
-情绪用原文的词明确写出，不改变情绪性质，不用额外表演改变语义，例如惊讶不等于惊喜。
+{language}
+保留用户明确指定的人物、服装、动作、景别、运镜、情绪和时间。
+情绪按原文的词义明确写出，不改变情绪性质，不用额外表演改变语义，例如惊讶不等于惊喜。
 只补充与原文相容的少量微动作、构图和光线；声音按下文的声源与时间规则处理。不要添加剧情、人物关系、
 转折、台词或背景音乐。未指定运镜时采用简单稳定的摄影安排，不同时堆叠多种运镜。
 图片紧跟各自的 <Picture N> 标签。确实收到图片时，观察可见的外貌、服装、道具、
@@ -54,7 +55,7 @@ retention_analysis、detailed_description、overall_soundscape、non_diegetic_mu
 
 subject_definitions：用 <Subject N> 定义需要追踪的人物、场景等，每项一行；
 保留已有主体编号。每个来自图片的主体必须在同一行明确写出实际来源，例如
-“<Subject 3> 道具（来源：<Picture 5>）：可辨认的外形、颜色和结构。”
+“{subject_example}”
 主体编号和图片编号独立，不能默认同号对应。原文“图5”等写法转换成 <Picture 5>，
 按原文指定的来源绑定，不能因重新排列主体而改变图片编号。多图定义同一主体时列出各自作用；
 同一图可以提供多个主体。只有图片来源而无独立关键帧用途时，不另建 <Picture N> 条目。
@@ -65,8 +66,7 @@ subject_definitions：用 <Subject N> 定义需要追踪的人物、场景等，
 summary：用一句简短的话概述视频，不引用台词原句，用概括性叙述表达事件。以 [reference generation] 开头；
 原文明确使用首帧或关键帧时用 [keyframe completion + reference generation]，保留已有适用前缀。
 概述使用已有 <Subject N> 表明主要人物和场景。
-retention_analysis：按已定义的引用标签逐行写“<Subject N>（出现于 [Shot N]）：
-fully_preserved - 要保留的具体特征”。只有原文改变了该引用的既定特征时才用
+retention_analysis：按已定义的引用标签逐行写“{retention_format}”。只有原文改变了该引用的既定特征时才用
 partially_preserved；特征转移到其他主体时用 attribute_transfer；仅借鉴大致风格时用
 weak_reference。人物正常说话、动作和表情变化不代表损失身份保真，不为此单列标记；
 图片未提供的信息不属于 weak_reference。不冻结姿势、视线或表情。
@@ -90,14 +90,14 @@ detailed_description：先用一两句建立视觉风格与共同环境，再逐
 没有指定换镜头或切换地点时保持同一镜头；明确要求连续镜头时不切镜。
 同一连续镜头中的人物位置前后一致；后文明确了并肩等关系而前文未指定时，从开场就采用相容位置，
 不先安排相对而坐再无动作地变成并肩，也不为补写的布局增加换座或转身动作。
-镜头时间戳不能替代事件时间范围：原文每个范围必须在正文中作为单独的“起–止 秒：”段保留，
-每个时间段另起一段，可把 s 统一为 秒，但起止数值与对应事件不变；即使某个范围与整个镜头重合也必须写出。
+镜头时间戳不能替代事件时间范围：原文每个范围必须在正文中作为单独的“{range_format}”段保留，
+每个时间段另起一段，起止数值与对应事件不变；即使某个范围与整个镜头重合也必须写出。
 多个事件时间段可以归属同一个 [Shot N]。没有给定时间时不要凭空编号秒数。
 
 定时对白先核定说话所需时间，再补不挤占对白的动作。正文仍按原文事件先后叙述：
 若原文是先出现表情再说话，就先写这一表情变化，紧接说话者与台词；不要把台词放在
 段首后才补叙之前发生的动作或情绪。原台词逐字保留且只在所属时间段的 <d> 中出现一次。
-普通话写成“<Subject N> (Sx) 说：<d>[Chinese] 原台词。</d>”；实际说话顺序决定稳定的
+普通话台词写成“{speech_format}”；实际说话顺序决定稳定的
 (S1)、(S2)，同一人继续沿用；保留原有语言标签。完整句末加标点，放在 </d> 前。
 保持原文要求的动作顺序；只要求情绪加说话时，让表情简短变化后及时开口，
 不要擅自添加取放物品、点头、转身、长时间停顿等前置动作来推迟台词。
@@ -112,7 +112,7 @@ detailed_description：先用一两句建立视觉风格与共同环境，再逐
 未明确要求声音的轻微动作保留为视觉描述，不擅自添加敲击、碰撞或接触来制造音效。
 静态图片只提供视觉依据，不证明声源正在发声。冒热气不等于沸腾，看到火焰不等于持续噼啪，
 云雾流动不等于水声，人物呼吸不等于可闻喘息；原文未要求时不要据此补出这些声音。
-overall_soundscape：只写适用于整片的环境底声与总体听感，保持对白清晰；没有共同底声可填 None。
+overall_soundscape：只写适用于整片的环境底声与总体听感，有对白时注明对白清晰；没有贯穿全片的底声时简短概括整体听感，只有原文明确要求全片静音时才填 N/A。
 不把不同地点的声音汇总成同时持续的背景声，不重复台词、动作音效或各镜头的声音清单。
 仅属于某地点的环境声、同步动作音效和非语言人声放在 detailed_description 的对应时间段，
 写清声源、触发动作及停止点，音量与景别、距离相符；动作结束或离开该地点时结束，除非原文要求延续。
@@ -120,21 +120,38 @@ overall_soundscape：只写适用于整片的环境底声与总体听感，保�
 例如：原文只有厨房搅锅、热气升起，保留这两个视觉动作，不自动补出沸腾、气泡炸裂或炉火噼啪声。
 若原文明示 3–6 秒厨房内有炉火声，则只写进 3–6 秒段，6 秒离开厨房时结束，不放入 overall_soundscape。
 生成正文用简短的正面描述表达需要的声音，不输出上述禁用声音清单，也不逐镜头重复“无某某声”。
-non_diegetic_music：只描述背景音乐；原文未要求音乐时填写 None。没有内容的可选段可留空。
+non_diegetic_music：只描述背景音乐；原文未要求音乐时填写 N/A。没有内容的可选段可留空。
 
-返回前逐条与原文对照：六个值都是字符串，语言不变，每个原时间范围都明确保留，
+返回前逐条与原文对照：六个值都是字符串，描述语言符合要求且台词未翻译，每个原时间范围都明确保留，
 每段原有动作未被静态构图代替，对应说话者与台词不变，情绪不变，没有额外切镜、前置动作或剧情，末句有收尾空间，
 逐项核对图片来源：原文指定的每个图与主体关系都在 subject_definitions 中明确保留，
 不能只留下 <Subject N> 而删掉其 <Picture N>，各段外观与来源图相符且不互相矛盾；
 [Shot 1] 无时间戳，后续镜头时刻与原文一致，连续运镜未变成切镜；
 全局声场没有局部音效，每个局部声音都有原文或明确动作依据及起止范围，没有从图片臆测持续声响。
 """
+# English follows the official Ref2VA rewrite format; 中文 keeps the same structure with Chinese wording.
+SYSTEM_PROMPTS = {
+    "English": _PROMPT.format(
+        language="六个字段的描述一律用英文书写，原文是中文也要译成英文；只有 <d> 内的台词、歌词和画面中"
+                 "可见的文字保留原语言，不翻译，也不附加译文。",
+        subject_example="<Subject 3> is the prop in <Picture 5>, with its recognizable shape, color and structure.",
+        retention_format="<Subject N> (appears in [Shot N]): fully_preserved - specific features to keep",
+        range_format="From 起 to 止 seconds:",
+        speech_format="<Subject N> (Sx) says: <d>[Chinese] 原台词。</d>"),
+    "中文": _PROMPT.format(
+        language="六个字段的描述一律用中文书写，原文是英文也要译成中文；只有 <d> 内的台词、歌词和画面中"
+                 "可见的文字保留原语言，不翻译，也不附加译文。",
+        subject_example="<Subject 3> 道具（来源：<Picture 5>）：可辨认的外形、颜色和结构。",
+        retention_format="<Subject N>（出现于 [Shot N]）：fully_preserved - 要保留的具体特征",
+        range_format="起–止 秒：",
+        speech_format="<Subject N> (Sx) 说：<d>[Chinese] 原台词。</d>"),
+}
 
 
 def picture_paths(pictures):
     names = json.loads(pictures)
     if not isinstance(names, list) or any(not isinstance(name, str) for name in names):
-        raise ValueError("图片列表必须是文件名数组。请重新选择图片。")
+        raise ValueError("Pictures must be a list of file names. Select the images again.")
     return [folder_paths.get_annotated_filepath(name) for name in names]
 
 
@@ -196,7 +213,7 @@ def save_builder_log(fields, result, pictures, model, elapsed, responses, api_ke
     return write_prompt_log(path or new_prompt_log_path("builder"), report, text, api_key)
 
 
-def rewrite_fields(fields, picture_count, config, image_paths=(), log_path=None):
+def rewrite_fields(fields, picture_count, config, image_paths=(), log_path=None, language="English"):
     content, pictures = picture_content(image_paths)
     source = json.dumps({"pictures": [f"<Picture {i + 1}>" for i in range(picture_count)],
                          "fields": fields, "variation": config.get("variation", 0)}, ensure_ascii=False)
@@ -206,7 +223,7 @@ def rewrite_fields(fields, picture_count, config, image_paths=(), log_path=None)
         "model": config["model"],
         "max_tokens": config.get("max_tokens", 4096), "stream": False,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPTS[language]},
             {"role": "user", "content": content or source},
         ],
     }
@@ -221,10 +238,12 @@ def rewrite_fields(fields, picture_count, config, image_paths=(), log_path=None)
                             {"Authorization": f"Bearer {key}"} if key else {}, config.get("timeout_seconds", 600))
         values = read_json_message(data, responses, "H3 fields")
         if not isinstance(values, dict) or any(not isinstance(values.get(name), str) for name in FIELDS):
-            raise ValueError("AI 没有返回完整的六个文本字段。原文未改动，请重试或增加 max_tokens。")
-        result = {name: values[name] for name in FIELDS}
+            raise ValueError("AI did not return all six text fields. The original is unchanged; retry or increase max_tokens.")
+        result = {name: FULL_WIDTH_SPEAKER.sub(r"(\1)", values[name]) for name in FIELDS}
         result["detailed_description"] = re.sub(
             r"(?m)^([ \t]*\[Shot [1-9]\d*\] At \d{2}:\d{2}\.\d{3})[，,]?", r"\1,", result["detailed_description"])
+        if dialogue_lines(assemble_prompt(fields)) - dialogue_lines(assemble_prompt(result)):
+            raise ValueError("AI changed or dropped <d> dialogue. The original is unchanged; retry.")
         return result
     finally:
         if config.get("log_prompts", True):
@@ -238,17 +257,19 @@ class MiniMaxH3PromptBuilder(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3PromptBuilder", display_name="H3 Ref Prompt Builder",
             category="video/minimax", is_output_node=True,
-            description="Ref2VA 六段提示词与图片编辑器。直接填写即可使用；连接 H3 Prompt API 后可点击 AI 整理。",
+            description="Ref2VA six-field prompt and image editor. Works by manual editing; connect H3 Prompt API to use AI rewrite.",
             inputs=[
-                *[io.String.Input(name, default="None" if name == "non_diegetic_music" else "",
+                *[io.String.Input(name, default="N/A" if name == "non_diegetic_music" else "",
                                   multiline=True, tooltip=label) for name, label in zip(FIELDS, LABELS)],
                 io.String.Input("pictures", default="[]"),
                 io.Int.Input("ai_request", default=0, min=0, max=0x7fffffff),
                 io.Custom("H3_PROMPT_API").Input("prompt_api", optional=True),
                 io.Boolean.Input("ai_read_images", default=True, optional=True,
-                                 tooltip="AI 读取压缩后的参考图。需要视觉模型；关闭后仅处理文字。"),
+                                 tooltip="AI reads compressed copies of the reference images. Requires a vision model; turn off to send text only."),
                 io.Boolean.Input("log_prompts", default=True, optional=True,
-                                 tooltip="保存原文、最终提示词和 AI 输入/回复到 output/h3_prompt_logs。连接的 Prompt API 也需开启 log_prompts。"),
+                                 tooltip="Save the original, final prompt and AI requests/replies to output/h3_prompt_logs. The connected Prompt API must also enable log_prompts."),
+                io.Combo.Input("ai_language", options=list(SYSTEM_PROMPTS), default="English", optional=True,
+                               tooltip="Description language of AI rewrites. English follows the official H3 Ref2VA format; dialogue always keeps its original language."),
             ],
             outputs=[io.String.Output(display_name="prompt"), io.Image.Output(display_name="reference_images")],
         )
@@ -264,7 +285,7 @@ class MiniMaxH3PromptBuilder(io.ComfyNode):
     @classmethod
     def execute(cls, subject_definitions, summary, retention_analysis, detailed_description,
                 overall_soundscape, non_diegetic_music, pictures="[]", ai_request=0, prompt_api=None, ai_read_images=True,
-                log_prompts=True):
+                log_prompts=True, ai_language="English"):
         fields = dict(zip(FIELDS, (subject_definitions, summary, retention_analysis, detailed_description,
                                   overall_soundscape, non_diegetic_music)))
         paths = picture_paths(pictures)
@@ -272,9 +293,9 @@ class MiniMaxH3PromptBuilder(io.ComfyNode):
         log_path = new_prompt_log_path("builder") if log_enabled else None
         if ai_request:
             if prompt_api is None:
-                raise ValueError("请先连接 H3 Prompt API，再点击 AI 整理。手动填写无需 LLM。")
+                raise ValueError("Connect H3 Prompt API before AI rewrite. Manual editing needs no LLM.")
             fields = rewrite_fields(fields, len(paths), {**prompt_api, "log_prompts": log_enabled},
-                                    paths if ai_read_images else (), log_path=log_path)
+                                    paths if ai_read_images else (), log_path=log_path, language=ai_language)
         prompt = assemble_prompt(fields)
         images = load_pictures(paths)
         if log_enabled and not ai_request:

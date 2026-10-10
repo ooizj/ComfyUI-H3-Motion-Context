@@ -46,15 +46,19 @@ Find it under `video/minimax`. It manages reference pictures and six Ref2VA prom
 | `retention_analysis` | Identity, clothing, environment and other reference features to preserve. |
 | `detailed_description` | Composition, actions, camera, dialogue and local sound effects, timed against the whole final video. |
 | `overall_soundscape` | Shared ambience and overall sound balance. |
-| `non_diegetic_music` | Music instructions, or `None` for no music. |
+| `non_diegetic_music` | Music instructions, or `N/A` for no music. |
 
 Use `[Shot 1]` for the opening and `[Shot 2] At 00:06.000, ...` for a cut at six seconds. An event range such as `0–3 seconds: ...` is not a cut. Keep the prompt's total duration consistent with Long Video's `total_seconds`.
 
-**Import a full prompt:** expand **导入整段提示词**. **按标题拆分填入** splits the six English field headings above, with Markdown headings or colons supported, without an API. Use **AI 转成六段** for free-form text, or **填入中文示例** for an editable Chinese example.
+**Interface language:** editors, node descriptions and tooltips follow ComfyUI's language setting: Chinese for Chinese locales, English otherwise.
 
-**AI editing:** connect H3 Prompt API to Builder's `prompt_api`. Only clicking **AI 整理** or **AI 转成六段** requests the API; this queues prompt processing without starting video generation. Results refill the fields and can be edited or undone. If you changed the original while waiting, click **应用 AI 结果** to apply the pending result. Normal execution, manual editing and heading-based imports make no API calls.
+**Import a full prompt:** expand **Import a full prompt**. **Split by headings** splits the six English field headings above, with Markdown headings or colons supported, without an API. Use **AI to six fields** for free-form text, or **Fill example** for an editable example.
 
-**AI 识别参考图:** enabled by default. Sends pictures in order as compressed JPEG copies with a maximum 1024 px long edge to a vision model. Turn it off for text-only models. Video generation uses the source pictures, padded for batching when sizes differ.
+**AI editing:** connect H3 Prompt API to Builder's `prompt_api`. Only clicking **AI rewrite** or **AI to six fields** requests the API; this queues prompt processing without starting video generation. Results refill the fields and can be edited or undone. If you changed the original while waiting, click **Apply AI result** to apply the pending result. Normal execution, manual editing and heading-based imports make no API calls.
+
+**AI output language:** set separately with the English / 中文 switch, English by default, following the official H3 Ref2VA format; Chinese is also available. Dialogue, lyrics and on-screen text keep their original language. The choice is saved with the node and becomes the default for new nodes.
+
+**AI reads reference images:** enabled by default. Sends pictures in order as compressed JPEG copies with a maximum 1024 px long edge to a vision model. Turn it off for text-only models. Video generation uses the source pictures, padded for batching when sizes differ.
 
 ## H3 Long Video (Simple)
 
@@ -85,7 +89,7 @@ The screenshot uses `total_seconds=14` and `segment_seconds=7` to generate an ap
 
 Each short segment is sampled separately with its own time starting at zero. Giving every segment the whole story can repeat opening actions/dialogue or confuse whole-video times with the current segment's times.
 
-With `prompt_api` connected, the node analyzes the timeline and dialogue, then adapts the full prompt to each segment's content. It converts whole-video times to segment-local times, accounts for overlap, and can adjust boundaries to avoid cutting a spoken line. Write explicit whole-video time ranges and dialogue in your source prompt.
+With `prompt_api` connected, the node analyzes the timeline and dialogue, then adapts the full prompt to each segment's content. It converts whole-video times to segment-local times, accounts for overlap, and can adjust boundaries to avoid cutting a spoken line. Write explicit whole-video time ranges and dialogue in your source prompt; without them, the story is spread over the segments in order. Segment prompts keep the source's description language.
 
 **If prompt splitting is not needed, disconnect Long Video's `prompt_api`: video generation still runs in segments, each reuses the original prompt, and no prompt API is called during video generation.**
 
@@ -93,7 +97,7 @@ With `prompt_api` connected, the node analyzes the timeline and dialogue, then a
 | --- | --- |
 | `prompt_api` disconnected | No; the prompt is not split. |
 | Only one segment is actually needed, even with `prompt_api` connected | No; uses the original prompt directly. |
-| `prompt_api` connected and multiple segments needed | Yes; analyzes timing, then rewrites segment prompts as needed. Without explicit times, it reuses the original after analysis. |
+| `prompt_api` connected and multiple segments needed | Yes; analyzes timing, then rewrites segment prompts. Without explicit times, events are spread over the segments in story order. |
 
 Builder's AI buttons are independent and still call their connected API when clicked. Omitting timestamps does not disable API calls; disconnect Long Video's `prompt_api` to skip automatic prompt splitting.
 

@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { localizer, t } from "./h3_i18n.js";
 
 const style = document.createElement("style");
 style.textContent = `
@@ -22,18 +23,21 @@ function install(node) {
   input.setAttribute("aria-label", "H3 API Key");
   input.autocomplete = "off";
   input.spellcheck = false;
-  input.placeholder = "未设置";
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="m3 3 18 18"/></svg>';
   const setVisible = visible => {
     input.type = visible ? "text" : "password";
-    toggle.title = visible ? "隐藏 API Key" : "显示 API Key";
+    toggle.title = visible ? t("隐藏 API Key", "Hide API key") : t("显示 API Key", "Show API key");
     toggle.setAttribute("aria-label", toggle.title);
     toggle.setAttribute("aria-pressed", String(visible));
     toggle.querySelector(".slash").style.display = visible ? "" : "none";
   };
   toggle.onclick = () => setVisible(input.type === "password");
+  const i18n = localizer(() => setVisible(input.type === "text"));
+  i18n.set(input, "未设置", "Not set", "placeholder");
+  const oldRemoved = node.onRemoved;
+  node.onRemoved = function (...args) { i18n.dispose(); oldRemoved?.apply(this, args); };
   row.append(label, input, toggle);
   for (const event of ["pointerdown", "pointermove", "pointerup", "mousedown", "dblclick"]) {
     row.addEventListener(event, e => e.stopPropagation());
