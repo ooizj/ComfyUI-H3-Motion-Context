@@ -1,13 +1,13 @@
-# H3 Motion Context
+# H3 Long Video
 
 [简体中文](README_zh-CN.md)
 
 Generate long MiniMax H3 videos with one prompt and a total duration. Based on [NikoDemon80/ComfyUI-H3-Motion-Context](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context), with a reference-prompt editor and automatic segment generation.
 
-Install under `ComfyUI/custom_nodes`, restart and refresh the browser. Requires ComfyUI with native H3 and **Concatenate Video** support.
+Install **H3 Long Video** from ComfyUI Manager, where you can also choose a version, or clone it under `ComfyUI/custom_nodes`; then restart and refresh the browser. Requires ComfyUI 0.36.0 or newer (native H3 and **Concatenate Video**). Uninstall the original H3 Motion Context first: both packs register the same node ids.
 
 ```sh
-git clone https://github.com/ooizj/ComfyUI-H3-Motion-Context.git comfyui-h3-motion-context
+git clone https://github.com/ooizj/ComfyUI-H3-Long-Video.git comfyui-h3-long-video
 ```
 
 Example workflows:

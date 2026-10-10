@@ -1,13 +1,13 @@
-# H3 Motion Context
+# H3 Long Video
 
 [English](README.md)
 
 一份提示词、一个总时长，生成 MiniMax H3 长视频。基于 [NikoDemon80/ComfyUI-H3-Motion-Context](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context)，增加参考提示词编辑和自动分段生成。
 
-安装到 `ComfyUI/custom_nodes` 后重启并刷新浏览器；需要支持原生 H3 和 **Concatenate Video** 的 ComfyUI。
+在 ComfyUI Manager 中安装 **H3 Long Video**（可选择版本），或克隆到 `ComfyUI/custom_nodes`，然后重启并刷新浏览器。需要 ComfyUI 0.36.0 或更新版本（原生 H3 和 **Concatenate Video**）。请先卸载原版 H3 Motion Context，两者注册了相同的节点 ID。
 
 ```sh
-git clone https://github.com/ooizj/ComfyUI-H3-Motion-Context.git comfyui-h3-motion-context
+git clone https://github.com/ooizj/ComfyUI-H3-Long-Video.git comfyui-h3-long-video
 ```
 
 示例工作流：

@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-h3-long-video"
 description = "Generate long MiniMax H3 videos from one prompt and a total duration. Segments are sampled with motion and audio continuation and joined into one video, with optional LLM prompt splitting, a Ref2VA prompt builder and the clip-chaining nodes. Based on NikoDemon80/ComfyUI-H3-Motion-Context."
-version = "0.7.0"
+version = "0.8.0"
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.10"

@@ -8,6 +8,23 @@ rejected any keyframe anchor other than the first or last frame. That
 landed in ComfyUI 0.34.0. Every release through 0.33.4 has the older
 layout. Each entry below says which of the two it works with.
 
+## 0.8.0 - 2026-10-10
+
+Requires ComfyUI 0.36.0 or newer. Restart ComfyUI after updating.
+
+- Long Video prompt splitting also adapts prompts without timestamps:
+  events are spread over the segments in story order and one-off events
+  are not replayed in later segments.
+- Cuts inside a segment's pinned opening are marked at their local time.
+- The first segment keeps the source task prefix and first-frame
+  instruction; segment prompts keep the source description language and
+  use the official retention_analysis format.
+- Prompt API `max_tokens` defaults to 65535; reasoning tokens count toward it.
+- Ref Prompt Builder: English or Chinese AI output (English by default),
+  editor text follows the ComfyUI language, `N/A` for absent music, and an
+  AI rewrite that changes `<d>` dialogue is rejected.
+- Full-width speaker IDs such as `（S1）` are written as `(S1)`.
+
 ## 0.7.0 - 2026-10-10
 
 Requires ComfyUI 0.36.0 or newer for Long Video (native Concatenate Video).
